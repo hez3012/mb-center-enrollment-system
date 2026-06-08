@@ -2,31 +2,62 @@
 
 namespace App\Models;
 
-// use Illuminate\Contracts\Auth\MustVerifyEmail;
-use Database\Factories\UserFactory;
-use Illuminate\Database\Eloquent\Attributes\Fillable;
-use Illuminate\Database\Eloquent\Attributes\Hidden;
-use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-#[Fillable(['name', 'email', 'password'])]
-#[Hidden(['password', 'remember_token'])]
 class User extends Authenticatable
 {
-    /** @use HasFactory<UserFactory> */
-    use HasFactory, Notifiable;
+    use Notifiable, SoftDeletes;
 
-    /**
-     * Get the attributes that should be cast.
-     *
-     * @return array<string, string>
-     */
-    protected function casts(): array
+    protected $primaryKey = 'user_id';
+
+    protected $fillable = [
+        'first_name', 'last_name', 'email',
+        'username', 'password', 'is_active',
+        'failed_attempts', 'locked_until', 'role_id',
+    ];
+
+    protected $hidden = ['password'];
+
+    protected $casts = [
+        'is_active'      => 'boolean',
+        'locked_until'   => 'datetime',
+        'failed_attempts'=> 'integer',
+    ];
+
+    // Our users table has no remember_token column
+    public function getRememberTokenName()
     {
-        return [
-            'email_verified_at' => 'datetime',
-            'password' => 'hashed',
-        ];
+        return null;
+    }
+
+    // Relationships
+    public function role()
+    {
+        return $this->belongsTo(Role::class, 'role_id', 'role_id');
+    }
+
+    public function auditLogs()
+    {
+        return $this->hasMany(AuditLog::class, 'user_id', 'user_id');
+    }
+
+    // Helper: full name
+    public function getFullNameAttribute()
+    {
+        return $this->first_name . ' ' . $this->last_name;
+    }
+
+    // Helper: check single role
+    public function hasRole(string $roleName): bool
+    {
+        return $this->role && $this->role->role_name === $roleName;
+    }
+
+    // Helper: check multiple roles
+    public function hasAnyRole(array $roles): bool
+    {
+        return $this->role && in_array($this->role->role_name, $roles);
     }
 }
