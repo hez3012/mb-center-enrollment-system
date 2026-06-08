@@ -19,41 +19,49 @@ class AuthController extends Controller
     public function login(Request $request)
     {
         $request->validate([
-            'username' => 'required|string',
+            'login'    => 'required|string',
             'password' => 'required|string',
         ]);
 
-        Log::info('Login attempt', ['username' => $request->username]);
+        // Detect if input is email or username
+        $loginField = filter_var($request->login, FILTER_VALIDATE_EMAIL)
+            ? 'email'
+            : 'username';
 
-        $user = User::where('username', $request->username)->first();
+        Log::info('Login attempt', [
+            'login'       => $request->login,
+            'login_field' => $loginField,
+        ]);
+
+        $user = User::where($loginField, $request->login)->first();
 
         // User not found
         if (!$user) {
-            Log::warning('Login failed: user not found', ['username' => $request->username]);
+            Log::warning('Login failed: user not found', ['login' => $request->login]);
             return back()
-                ->withErrors(['username' => 'Invalid username or password.'])
+                ->withErrors(['login' => 'Invalid email/username or password.'])
                 ->withInput();
         }
 
         // Account inactive
         if (!$user->is_active) {
-            Log::warning('Login failed: account inactive', ['username' => $request->username]);
+            Log::warning('Login failed: account inactive', ['login' => $request->login]);
             return back()
-                ->withErrors(['username' => 'Your account has been deactivated. Please contact the administrator.'])
+                ->withErrors(['login' => 'Your account has been deactivated. Please contact the administrator.'])
                 ->withInput();
         }
 
         // Account locked
         if ($user->locked_until && Carbon::now()->lessThan($user->locked_until)) {
             $minutesLeft = Carbon::now()->diffInMinutes($user->locked_until) + 1;
-            Log::warning('Login failed: account locked', ['username' => $request->username]);
+            Log::warning('Login failed: account locked', ['login' => $request->login]);
             return back()
-                ->withErrors(['username' => "Account is temporarily locked. Try again in {$minutesLeft} minute(s)."])
+                ->withErrors(['login' => "Account is temporarily locked. Try again in {$minutesLeft} minute(s)."])
                 ->withInput();
         }
 
         // Attempt login
-        if (Auth::attempt(['username' => $request->username, 'password' => $request->password])) {
+        if (Auth::attempt([$loginField => $request->login, 'password' => $request->password])) {
 
             // Reset failed attempts on success
             $user->failed_attempts = 0;
@@ -72,8 +80,8 @@ class AuthController extends Controller
             $request->session()->regenerate();
 
             Log::info('Login successful', [
-                'username' => $user->username,
-                'role'     => $user->role->role_name
+                'login' => $request->login,
+                'role'  => $user->role->role_name,
             ]);
 
             // Role-based redirect
@@ -93,35 +101,36 @@ class AuthController extends Controller
         if ($user->failed_attempts >= 5) {
             $user->locked_until    = Carbon::now()->addMinutes(15);
             $user->failed_attempts = 0;
-            Log::warning('Account locked: too many failed attempts', ['username' => $request->username]);
+            Log::warning('Account locked: too many failed attempts', ['login' => $request->login]);
         }
 
         $user->save();
 
         Log::warning('Login failed: wrong password', [
-            'username'        => $request->username,
+            'login'           => $request->login,
             'failed_attempts' => $user->failed_attempts,
         ]);
 
         return back()
-            ->withErrors(['username' => 'Invalid username or password.'])
+            ->withErrors(['login' => 'Invalid email/username or password.'])
             ->withInput();
     }
 
     public function logout(Request $request)
     {
         if (Auth::check()) {
-            $userId = Auth::user()->user_id;
+            /** @var \App\Models\User $user */
+            $user = Auth::user();
 
             AuditLog::create([
-                'user_id'    => $userId,
+                'user_id'    => $user->user_id,
                 'action'     => 'LOGOUT',
                 'table_name' => 'users',
-                'record_id'  => $userId,
+                'record_id'  => $user->user_id,
                 'changes'    => null,
             ]);
 
-            Log::info('User logged out', ['user_id' => $userId]);
+            Log::info('User logged out', ['user_id' => $user->user_id]);
         }
 
         Auth::logout();

@@ -12,7 +12,6 @@
     <div class="row justify-content-center align-items-center min-vh-100">
         <div class="col-md-5">
 
-            <!-- Card -->
             <div class="card shadow-sm border-0">
                 <div class="card-body p-5">
 
@@ -26,7 +25,7 @@
                     </div>
 
                     <!-- Error messages -->
-                    @if ($errors->any())
+                    @if($errors->any())
                         <div class="alert alert-danger py-2">
                             <i class="bi bi-exclamation-circle me-1"></i>
                             {{ $errors->first() }}
@@ -37,22 +36,23 @@
                     <form method="POST" action="{{ route('login.post') }}">
                         @csrf
 
-                        <!-- Username -->
+                        <!-- Email or Username -->
                         <div class="mb-3">
-                            <label class="form-label fw-semibold">Username</label>
+                            <label class="form-label fw-semibold">
+                                Email or Username
+                            </label>
                             <div class="input-group">
                                 <span class="input-group-text">
                                     <i class="bi bi-person"></i>
                                 </span>
                                 <input
                                     type="text"
-                                    name="username"
-                                    class="form-control @error('username') is-invalid @enderror"
-                                    value="{{ old('username') }}"
-                                    placeholder="Enter your username"
+                                    name="login"
+                                    class="form-control @error('login') is-invalid @enderror"
+                                    value="{{ old('login') }}"
+                                    placeholder="Enter your email or username"
                                     autofocus
-                                    required
-                                >
+                                    required>
                             </div>
                         </div>
 
@@ -68,16 +68,14 @@
                                     name="password"
                                     class="form-control"
                                     placeholder="Enter your password"
-                                    required
-                                >
+                                    required>
                             </div>
                         </div>
 
                         <!-- Submit -->
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary">
-                                <i class="bi bi-box-arrow-in-right me-1"></i>
-                                Login
+                                <i class="bi bi-box-arrow-in-right me-1"></i>Login
                             </button>
                         </div>
 
@@ -86,7 +84,6 @@
                 </div>
             </div>
 
-            <!-- Footer note -->
             <p class="text-center text-muted small mt-3">
                 &copy; {{ date('Y') }} M.B. Therapy Center. All rights reserved.
             </p>
