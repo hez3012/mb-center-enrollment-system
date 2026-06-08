@@ -21,21 +21,31 @@ class User extends Authenticatable
     protected $hidden = ['password'];
 
     protected $casts = [
-        'is_active'      => 'boolean',
-        'locked_until'   => 'datetime',
-        'failed_attempts'=> 'integer',
+        'is_active'       => 'boolean',
+        'locked_until'    => 'datetime',
+        'failed_attempts' => 'integer',
     ];
 
-    // Our users table has no remember_token column
     public function getRememberTokenName()
     {
         return null;
     }
 
-    // Relationships
     public function role()
     {
         return $this->belongsTo(Role::class, 'role_id', 'role_id');
+    }
+
+    public function permissions()
+    {
+        return $this->belongsToMany(
+            Permission::class,
+            'user_permissions',
+            'user_id',
+            'permission_id',
+            'user_id',
+            'permission_id'
+        );
     }
 
     public function auditLogs()
@@ -43,21 +53,23 @@ class User extends Authenticatable
         return $this->hasMany(AuditLog::class, 'user_id', 'user_id');
     }
 
-    // Helper: full name
     public function getFullNameAttribute()
     {
         return $this->first_name . ' ' . $this->last_name;
     }
 
-    // Helper: check single role
     public function hasRole(string $roleName): bool
     {
         return $this->role && $this->role->role_name === $roleName;
     }
 
-    // Helper: check multiple roles
     public function hasAnyRole(array $roles): bool
     {
         return $this->role && in_array($this->role->role_name, $roles);
+    }
+
+    public function hasPermission(string $permissionName): bool
+    {
+        return $this->permissions->contains('permission_name', $permissionName);
     }
 }
