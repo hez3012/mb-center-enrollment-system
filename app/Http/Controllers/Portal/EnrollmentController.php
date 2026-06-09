@@ -1,0 +1,151 @@
+<?php
+
+namespace App\Http\Controllers\Portal;
+
+use App\Http\Controllers\Controller;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Storage;
+use App\Models\Enrollment;
+use App\Models\EnrollmentDocument;
+use App\Models\SchoolYear;
+use App\Models\DocumentType;
+use App\Models\AuditLog;
+
+class EnrollmentController extends Controller
+{
+    public function index()
+    {
+        $user       = Auth::user();
+        $guardian   = $user->guardian;
+        $studentIds = $guardian?->students->pluck('student_id')->toArray() ?? [];
+
+        $enrollments = Enrollment::with(['student', 'schoolYear', 'programLevel'])
+            ->whereIn('student_id', $studentIds)
+            ->orderByDesc('created_at')
+            ->get();
+
+        return view('portal.enrollments.index', compact('enrollments'));
+    }
+
+    public function create()
+    {
+        $user     = Auth::user();
+        $guardian = $user->guardian;
+
+        if (!$guardian) {
+            return redirect()->route('portal.dashboard')
+                ->with('error', 'Your guardian profile is not set up yet.');
+        }
+
+        $students      = $guardian->students()->where('status', 'active')->get();
+        $currentYear   = SchoolYear::current();
+        $documentTypes = DocumentType::all();
+
+        // Exclude students already enrolled this school year
+        if ($currentYear) {
+            $enrolledIds = Enrollment::where('school_year_id', $currentYear->school_year_id)
+                ->whereNull('deleted_at')
+                ->pluck('student_id')
+                ->toArray();
+            $students = $students->whereNotIn('student_id', $enrolledIds);
+        }
+
+        return view('portal.enrollments.create', compact(
+            'students', 'currentYear', 'documentTypes'
+        ));
+    }
+
+    public function store(Request $request)
+    {
+        $user     = Auth::user();
+        $guardian = $user->guardian;
+
+        $request->validate([
+            'student_id'       => 'required|exists:student,student_id',
+            'school_year_id'   => 'required|exists:school_year,school_year_id',
+            'program_level_id' => 'required|exists:program_level,program_level_id',
+            'waiver_signed'    => 'accepted',
+            'doc_file.*'       => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+        ]);
+
+        // Make sure the student belongs to this guardian
+        $studentBelongs = $guardian?->students->contains('student_id', $request->student_id);
+
+        if (!$studentBelongs) {
+            return back()->with('error', 'Invalid student selection.')->withInput();
+        }
+
+        // Check duplicate enrollment
+        $duplicate = Enrollment::where('student_id', $request->student_id)
+            ->where('school_year_id', $request->school_year_id)
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if ($duplicate) {
+            return back()
+                ->with('error', 'This student is already enrolled for the selected school year.')
+                ->withInput();
+        }
+
+        $enrollment = Enrollment::create([
+            'student_id'       => $request->student_id,
+            'school_year_id'   => $request->school_year_id,
+            'program_level_id' => $request->program_level_id,
+            'enrollment_date'  => now()->toDateString(),
+            'enrollment_type'  => 'online',
+            'status'           => 'pending',
+            'waiver_signed'    => true,
+            'processed_by'     => null,
+        ]);
+
+        // Save uploaded documents
+        $documentTypes = DocumentType::all();
+        foreach ($documentTypes as $docType) {
+            $filePath         = null;
+            $submissionStatus = 'pending';
+
+            if ($request->hasFile("doc_file.{$docType->document_type_id}")) {
+                $filePath = $request->file("doc_file.{$docType->document_type_id}")
+                    ->store("enrollment_docs/{$enrollment->enrollment_id}", 'public');
+                $submissionStatus = 'submitted';
+            }
+
+            EnrollmentDocument::create([
+                'enrollment_id'    => $enrollment->enrollment_id,
+                'document_type_id' => $docType->document_type_id,
+                'submission_status'=> $submissionStatus,
+                'file_path'        => $filePath,
+                'submission_date'  => $filePath ? now()->toDateString() : null,
+            ]);
+        }
+
+        AuditLog::create([
+            'user_id'    => $user->user_id,
+            'action'     => 'CREATE',
+            'table_name' => 'enrollment',
+            'record_id'  => $enrollment->enrollment_id,
+            'changes'    => json_encode(['type' => 'online', 'student_id' => $request->student_id]),
+        ]);
+
+        return redirect()->route('portal.enrollments.show', $enrollment->enrollment_id)
+            ->with('success', 'Enrollment submitted successfully. Please wait for admin approval.');
+    }
+
+    public function show($id)
+    {
+        $user       = Auth::user();
+        $guardian   = $user->guardian;
+        $studentIds = $guardian?->students->pluck('student_id')->toArray() ?? [];
+
+        $enrollment = Enrollment::with([
+            'student', 'schoolYear', 'programLevel', 'documents.documentType'
+        ])->findOrFail($id);
+
+        if (!in_array($enrollment->student_id, $studentIds)) {
+            abort(403);
+        }
+
+        return view('portal.enrollments.show', compact('enrollment'));
+    }
+}

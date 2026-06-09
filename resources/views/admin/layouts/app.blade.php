@@ -3,85 +3,71 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Dashboard') — H.O.P.E.</title>
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
+    <title>H.O.P.E. — @yield('title', 'Dashboard')</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
     <style>
         body { background-color: #f8f9fa; }
         .sidebar {
-            width: 250px;
+            width: 240px;
             min-height: 100vh;
             background-color: #ffffff;
-            border-right: 1px solid #e9ecef;
+            border-right: 1px solid #dee2e6;
             position: fixed;
-            top: 0;
-            left: 0;
+            top: 0; left: 0;
             display: flex;
             flex-direction: column;
             z-index: 100;
         }
-        .sidebar .brand {
+        .sidebar-brand {
             padding: 1.25rem 1rem;
-            border-bottom: 1px solid #e9ecef;
+            border-bottom: 1px solid #dee2e6;
         }
         .sidebar .nav-link {
             color: #495057;
             padding: 0.6rem 1rem;
-            border-radius: 8px;
+            border-radius: 6px;
             margin: 2px 8px;
-            font-size: 0.9rem;
-            transition: background-color 0.15s;
+            font-size: 0.875rem;
+            display: flex;
+            align-items: center;
         }
-        .sidebar .nav-link:hover  { background-color: #f1f3f5; color: #212529; }
+        .sidebar .nav-link:hover { background-color: #f1f3f5; color: #212529; }
         .sidebar .nav-link.active { background-color: #e7f1ff; color: #0d6efd; font-weight: 500; }
-        .sidebar .nav-link i { width: 20px; }
-        .sidebar-bottom {
-            margin-top: auto;
-            padding: 0.5rem 0;
-            border-top: 1px solid #e9ecef;
-        }
-        .main-content {
-            margin-left: 250px;
-            padding: 1.5rem;
+        .main-wrapper {
+            margin-left: 240px;
+            display: flex;
+            flex-direction: column;
             min-height: 100vh;
         }
         .topbar {
             background-color: #ffffff;
-            border-bottom: 1px solid #e9ecef;
-            padding: 0.6rem 1.5rem;
-            margin-left: 250px;
+            border-bottom: 1px solid #dee2e6;
+            padding: 0.75rem 1.5rem;
             position: sticky;
             top: 0;
             z-index: 99;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
         }
-        .role-badge {
-            font-size: 0.7rem;
-            padding: 2px 8px;
-            border-radius: 10px;
-        }
+        .content-area { padding: 1.5rem; flex: 1; }
     </style>
 </head>
 <body>
 
 {{-- Sidebar --}}
 <div class="sidebar">
-    <div class="brand">
-        <div class="fw-bold text-primary" style="font-size:1rem;">H.O.P.E.</div>
-        <div class="text-muted" style="font-size:0.75rem;">M.B. Therapy Center</div>
+    <div class="sidebar-brand">
+        <div class="fw-bold text-primary" style="font-size:1rem;">
+            <i class="bi bi-heart-pulse me-2"></i>H.O.P.E.
+        </div>
+        <div class="text-muted" style="font-size:0.7rem;">M.B. Therapy Center</div>
     </div>
 
     <nav class="nav flex-column pt-2">
-
-        {{-- Dashboard --}}
         <a href="{{ route('admin.dashboard') }}"
            class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
             <i class="bi bi-speedometer2 me-2"></i>Dashboard
         </a>
 
-        {{-- User Management --}}
         @if(Auth::user()->hasPermission('view_user'))
         <a href="{{ route('admin.users.index') }}"
            class="nav-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
@@ -89,7 +75,6 @@
         </a>
         @endif
 
-        {{-- Guardian Management --}}
         @if(Auth::user()->hasPermission('view_guardian'))
         <a href="{{ route('admin.guardians.index') }}"
            class="nav-link {{ request()->routeIs('admin.guardians.*') ? 'active' : '' }}">
@@ -97,7 +82,6 @@
         </a>
         @endif
 
-        {{-- Student Management --}}
         @if(Auth::user()->hasPermission('view_student'))
         <a href="{{ route('admin.students.index') }}"
            class="nav-link {{ request()->routeIs('admin.students.*') ? 'active' : '' }}">
@@ -105,69 +89,65 @@
         </a>
         @endif
 
+        @if(Auth::user()->hasPermission('view_enrollment'))
+        <a href="{{ route('admin.enrollments.index') }}"
+           class="nav-link {{ request()->routeIs('admin.enrollments.*') ? 'active' : '' }}">
+            <i class="bi bi-clipboard-check me-2"></i>Enrollment Management
+        </a>
+        @endif
     </nav>
 
-    <div class="sidebar-bottom">
+    <div class="mt-auto p-3 border-top">
+        <div class="small text-muted mb-1">
+            <i class="bi bi-person-circle me-1"></i>
+            {{ Auth::user()->full_name ?? Auth::user()->username }}
+        </div>
+        <div class="small text-muted mb-2">
+            <span class="badge bg-secondary">{{ ucfirst(Auth::user()->role?->role_name) }}</span>
+        </div>
         <a href="{{ route('admin.profile.edit') }}"
-           class="nav-link {{ request()->routeIs('admin.profile.*') ? 'active' : '' }}">
-            <i class="bi bi-person-gear me-2"></i>Profile Settings
+           class="btn btn-sm btn-outline-secondary w-100 mb-1">
+            <i class="bi bi-gear me-1"></i>Profile Settings
         </a>
         <form method="POST" action="{{ route('logout') }}">
             @csrf
-            <button type="submit"
-                    class="nav-link border-0 bg-transparent w-100 text-start text-danger">
-                <i class="bi bi-box-arrow-right me-2"></i>Logout
+            <button type="submit" class="btn btn-sm btn-outline-danger w-100">
+                <i class="bi bi-box-arrow-right me-1"></i>Logout
             </button>
         </form>
     </div>
 </div>
 
-{{-- Top bar --}}
-<div class="topbar">
-    <span class="fw-semibold text-muted small">@yield('title', 'Dashboard')</span>
-    <div class="d-flex align-items-center gap-2">
-        <span class="text-muted small">{{ Auth::user()->full_name }}</span>
-        @php
-            $roleColors = [
-                'directress' => 'danger',
-                'admin'      => 'primary',
-                'teacher'    => 'success',
-                'staff'      => 'info',
-                'guardian'   => 'secondary',
-            ];
-            $roleName = Auth::user()->role?->role_name;
-        @endphp
-        <span class="badge bg-{{ $roleColors[$roleName] ?? 'secondary' }} role-badge">
-            {{ ucfirst($roleName) }}
-        </span>
+{{-- Main Wrapper --}}
+<div class="main-wrapper">
+
+    {{-- Topbar --}}
+    <div class="topbar d-flex justify-content-between align-items-center">
+        <div class="fw-semibold text-dark">@yield('title', 'Dashboard')</div>
+        <div class="text-muted small">
+            <i class="bi bi-calendar3 me-1"></i>
+            {{ now()->format('F d, Y') }}
+        </div>
     </div>
-</div>
 
-{{-- Main Content --}}
-<div class="main-content">
-
-    @if(session('success'))
-        <div class="alert alert-success alert-dismissible fade show">
-            <i class="bi bi-check-circle me-1"></i>{{ session('success') }}
+    {{-- Flash Messages --}}
+    <div class="content-area">
+        @if(session('success'))
+        <div class="alert alert-success alert-dismissible fade show" role="alert">
+            <i class="bi bi-check-circle me-2"></i>{{ session('success') }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-    @endif
+        @endif
 
-    @if(session('error'))
-        <div class="alert alert-danger alert-dismissible fade show">
-            <i class="bi bi-exclamation-circle me-1"></i>{{ session('error') }}
+        @if(session('error'))
+        <div class="alert alert-danger alert-dismissible fade show" role="alert">
+            <i class="bi bi-exclamation-circle me-2"></i>{{ session('error') }}
             <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
         </div>
-    @endif
+        @endif
 
-    @if(session('info'))
-        <div class="alert alert-info alert-dismissible fade show">
-            <i class="bi bi-info-circle me-1"></i>{{ session('info') }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-        </div>
-    @endif
-
-    @yield('content')
+        @yield('content')
+    </div>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>

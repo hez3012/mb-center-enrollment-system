@@ -1,0 +1,66 @@
+@extends('portal.layouts.app')
+@section('title', 'My Enrollments')
+@section('content')
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="fw-bold mb-0">My Enrollments</h5>
+    <a href="{{ route('portal.enrollments.create') }}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-circle me-1"></i>Submit New Enrollment
+    </a>
+</div>
+
+@if($enrollments->isEmpty())
+<div class="card border-0 shadow-sm">
+    <div class="card-body text-center py-5">
+        <i class="bi bi-clipboard-x text-muted" style="font-size:2.5rem;"></i>
+        <p class="text-muted mt-3">No enrollment records yet.</p>
+        <a href="{{ route('portal.enrollments.create') }}" class="btn btn-primary btn-sm">
+            Submit Your First Enrollment
+        </a>
+    </div>
+</div>
+@else
+<div class="row g-3">
+    @foreach($enrollments as $enrollment)
+    <div class="col-md-6">
+        <div class="card border-0 shadow-sm h-100">
+            <div class="card-body">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <div class="fw-semibold">{{ $enrollment->student?->full_name }}</div>
+                        <div class="text-muted small">{{ $enrollment->schoolYear?->year_label }}</div>
+                    </div>
+                    <span class="badge bg-{{ $enrollment->status_badge }}">
+                        {{ ucfirst($enrollment->status) }}
+                    </span>
+                </div>
+                <table class="table table-sm mb-2">
+                    <tr>
+                        <td class="text-muted small" style="width:40%">Program</td>
+                        <td class="small">{{ $enrollment->programLevel?->program_name ?? '—' }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted small">Type</td>
+                        <td class="small">{{ $enrollment->type_label }}</td>
+                    </tr>
+                    <tr>
+                        <td class="text-muted small">Date Filed</td>
+                        <td class="small">{{ $enrollment->enrollment_date?->format('m/d/Y') }}</td>
+                    </tr>
+                </table>
+                @if($enrollment->status === 'rejected' && $enrollment->rejection_reason)
+                <div class="alert alert-danger py-1 px-2 small mb-2">
+                    <i class="bi bi-x-circle me-1"></i>{{ $enrollment->rejection_reason }}
+                </div>
+                @endif
+                <a href="{{ route('portal.enrollments.show', $enrollment->enrollment_id) }}"
+                   class="btn btn-sm btn-outline-primary w-100">
+                    <i class="bi bi-eye me-1"></i>View Details
+                </a>
+            </div>
+        </div>
+    </div>
+    @endforeach
+</div>
+@endif
+@endsection
