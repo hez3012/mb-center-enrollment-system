@@ -2,61 +2,119 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
+use App\Http\Controllers\Admin\DashboardController;
 use App\Http\Controllers\Admin\UserController;
+use App\Http\Controllers\Admin\GuardianController;
+use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\ProfileController;
+use App\Http\Controllers\Portal\ProfileController as PortalProfileController;
+use App\Http\Controllers\Portal\DashboardController as PortalDashboardController;
 
-Route::get('/', function () {
-    return redirect()->route('login');
-});
+Route::get('/', fn() => redirect()->route('login'));
+Route::get('/login',   [AuthController::class, 'showLogin'])->name('login');
+Route::post('/login',  [AuthController::class, 'login'])->name('login.post');
+Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 
-Route::get('/login', [AuthController::class, 'showLogin'])
-    ->name('login')
-    ->middleware('guest');
+Route::middleware(['auth'])->group(function () {
 
-Route::post('/login', [AuthController::class, 'login'])
-    ->name('login.post');
+    // ── Admin routes ─────────────────────────────────────────────
+    Route::prefix('admin')->group(function () {
 
-Route::post('/logout', [AuthController::class, 'logout'])
-    ->name('logout')
-    ->middleware('auth');
-
-Route::middleware(['auth', 'role:directress,admin,teacher,staff'])
-    ->prefix('admin')
-    ->name('admin.')
-    ->group(function () {
-
-        Route::get('/dashboard', function () {
-            return view('admin.dashboard');
-        })->name('dashboard');
+        // Dashboard
+        Route::get('/dashboard', [DashboardController::class, 'index'])
+            ->name('admin.dashboard');
 
         // Profile Settings
-        Route::get('/profile',            [ProfileController::class, 'edit'])->name('profile');
-        Route::put('/profile',            [ProfileController::class, 'update'])->name('profile.update');
-        Route::delete('/profile/deactivate', [ProfileController::class, 'deactivate'])->name('profile.deactivate');
+        Route::get('/profile',    [ProfileController::class, 'edit'])->name('admin.profile.edit');
+        Route::put('/profile',    [ProfileController::class, 'update'])->name('admin.profile.update');
+        Route::delete('/profile', [ProfileController::class, 'deactivate'])->name('admin.profile.deactivate');
 
-        // User Management
-        Route::middleware(['permission:create_user,edit_user,deactivate_user,view_user'])
-            ->prefix('users')
-            ->name('users.')
-            ->group(function () {
-                Route::get('/',              [UserController::class, 'index'])->name('index');
-                Route::get('/create',        [UserController::class, 'create'])->name('create');
-                Route::post('/',             [UserController::class, 'store'])->name('store');
-                Route::get('/{id}/edit',     [UserController::class, 'edit'])->name('edit');
-                Route::put('/{id}',          [UserController::class, 'update'])->name('update');
-                Route::patch('/{id}/toggle', [UserController::class, 'toggle'])->name('toggle');
-            });
+        // ── User Management ──────────────────────────────────────
+        Route::get('/users', [UserController::class, 'index'])
+            ->middleware('permission:view_user')
+            ->name('admin.users.index');
+
+        // IMPORTANT: /users/create MUST come before /users/{id}
+        Route::get('/users/create', [UserController::class, 'create'])
+            ->middleware('permission:create_user')
+            ->name('admin.users.create');
+
+        Route::post('/users', [UserController::class, 'store'])
+            ->middleware('permission:create_user')
+            ->name('admin.users.store');
+
+        Route::get('/users/{id}', [UserController::class, 'show'])
+            ->middleware('permission:view_user')
+            ->name('admin.users.show');
+
+        Route::get('/users/{id}/edit', [UserController::class, 'edit'])
+            ->middleware('permission:edit_user')
+            ->name('admin.users.edit');
+
+        Route::put('/users/{id}', [UserController::class, 'update'])
+            ->middleware('permission:edit_user')
+            ->name('admin.users.update');
+
+        Route::patch('/users/{id}/toggle', [UserController::class, 'toggle'])
+            ->middleware('permission:edit_user')
+            ->name('admin.users.toggle');
+
+        Route::delete('/users/{id}', [UserController::class, 'destroy'])
+            ->middleware('permission:delete_user')
+            ->name('admin.users.destroy');
+
+        // ── Guardian Management ──────────────────────────────────
+        Route::get('/guardians', [GuardianController::class, 'index'])
+            ->middleware('permission:view_guardian')
+            ->name('admin.guardians.index');
+
+        Route::get('/guardians/{id}', [GuardianController::class, 'show'])
+            ->middleware('permission:view_guardian')
+            ->name('admin.guardians.show');
+
+        Route::get('/guardians/{id}/edit', [GuardianController::class, 'edit'])
+            ->middleware('permission:edit_guardian')
+            ->name('admin.guardians.edit');
+
+        Route::put('/guardians/{id}', [GuardianController::class, 'update'])
+            ->middleware('permission:edit_guardian')
+            ->name('admin.guardians.update');
+
+        // ── Student Management ───────────────────────────────────
+        Route::get('/students', [StudentController::class, 'index'])
+            ->middleware('permission:view_student')
+            ->name('admin.students.index');
+
+        // IMPORTANT: /students/create MUST come before /students/{id}
+        Route::get('/students/create', [StudentController::class, 'create'])
+            ->middleware('permission:create_student')
+            ->name('admin.students.create');
+
+        Route::post('/students', [StudentController::class, 'store'])
+            ->middleware('permission:create_student')
+            ->name('admin.students.store');
+
+        Route::get('/students/{id}', [StudentController::class, 'show'])
+            ->middleware('permission:view_student')
+            ->name('admin.students.show');
+
+        Route::get('/students/{id}/edit', [StudentController::class, 'edit'])
+            ->middleware('permission:edit_student')
+            ->name('admin.students.edit');
+
+        Route::put('/students/{id}', [StudentController::class, 'update'])
+            ->middleware('permission:edit_student')
+            ->name('admin.students.update');
+
+        Route::delete('/students/{id}', [StudentController::class, 'destroy'])
+            ->middleware('permission:delete_student')
+            ->name('admin.students.destroy');
     });
 
-Route::middleware(['auth', 'role:guardian'])
-    ->prefix('portal')
-    ->name('portal.')
-    ->group(function () {
-        Route::get('/dashboard', function () {
-            return view('portal.dashboard');
-        })->name('dashboard');
+    // ── Guardian Portal routes ────────────────────────────────────
+    Route::prefix('portal')->group(function () {
+        Route::get('/dashboard', [PortalDashboardController::class, 'index'])->name('portal.dashboard');
+        Route::get('/profile',   [PortalProfileController::class, 'edit'])->name('portal.profile.edit');
+        Route::put('/profile',   [PortalProfileController::class, 'update'])->name('portal.profile.update');
     });
-
-Route::fallback(function () {
-    return redirect()->route('login');
 });

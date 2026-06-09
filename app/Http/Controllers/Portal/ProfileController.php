@@ -1,12 +1,11 @@
 <?php
 
-namespace App\Http\Controllers\Admin;
+namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
 use App\Models\AuditLog;
 use App\Helpers\PhilippinesGeo;
 
@@ -14,7 +13,7 @@ class ProfileController extends Controller
 {
     public function edit()
     {
-        return view('admin.profile', [
+        return view('portal.profile', [
             'user'      => Auth::user(),
             'regions'   => PhilippinesGeo::regions(),
             'provinces' => PhilippinesGeo::provinces(),
@@ -32,7 +31,7 @@ class ProfileController extends Controller
             'middle_name'     => 'nullable|string|max:50',
             'last_name'       => 'required|string|max:50',
             'birthdate'       => 'nullable|date',
-            'contact_number_1'=> 'nullable|string|max:20',
+            'contact_number_1'=> 'required|string|max:20',
             'contact_number_2'=> 'nullable|string|max:20',
             'region'          => 'nullable|string|max:100',
             'province'        => 'nullable|string|max:100',
@@ -59,37 +58,9 @@ class ProfileController extends Controller
             'action'     => 'UPDATE',
             'table_name' => 'users',
             'record_id'  => $user->user_id,
-            'changes'    => json_encode(['action' => 'profile_updated']),
+            'changes'    => json_encode(['action' => 'portal_profile_updated']),
         ]);
 
         return back()->with('success', 'Profile updated successfully.');
-    }
-
-    public function deactivate(Request $request)
-    {
-        /** @var \App\Models\User $user */
-        $user = Auth::user();
-
-        if ($user->role->role_name === 'directress') {
-            return back()->with('error', 'The Directress account cannot be self-deactivated.');
-        }
-
-        $user->is_active = false;
-        $user->save();
-
-        AuditLog::create([
-            'user_id'    => $user->user_id,
-            'action'     => 'UPDATE',
-            'table_name' => 'users',
-            'record_id'  => $user->user_id,
-            'changes'    => json_encode(['action' => 'self_deactivated']),
-        ]);
-
-        Auth::logout();
-        $request->session()->invalidate();
-        $request->session()->regenerateToken();
-
-        return redirect()->route('login')
-            ->with('info', 'Your account has been deactivated. Please contact your administrator to reactivate it.');
     }
 }

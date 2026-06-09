@@ -1,4 +1,4 @@
-@extends('admin.layouts.app')
+@extends('portal.layouts.app')
 @section('title', 'Profile Settings')
 @section('content')
 
@@ -13,17 +13,10 @@
     </div>
 @endif
 
-@if(session('error'))
-    <div class="alert alert-danger alert-dismissible fade show">
-        <i class="bi bi-exclamation-circle me-1"></i>{{ session('error') }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-@endif
-
-<div class="card border-0 shadow-sm mb-4">
+<div class="card border-0 shadow-sm">
     <div class="card-header bg-white fw-semibold">Account Information</div>
     <div class="card-body">
-        <form method="POST" action="{{ route('admin.profile.update') }}">
+        <form method="POST" action="{{ route('portal.profile.update') }}">
             @csrf @method('PUT')
 
             {{-- Personal Information --}}
@@ -77,7 +70,7 @@
                     <label class="form-label fw-semibold">Contact #1</label>
                     <input type="text" name="contact_number_1"
                            class="form-control @error('contact_number_1') is-invalid @enderror"
-                           value="{{ old('contact_number_1', $user->contact_number_1) }}">
+                           value="{{ old('contact_number_1', $user->contact_number_1) }}" required>
                     @error('contact_number_1')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-4">
@@ -152,55 +145,6 @@
         </form>
     </div>
 </div>
-
-<div class="card border-danger">
-    <div class="card-header text-danger fw-semibold bg-white">
-        <i class="bi bi-exclamation-triangle me-1"></i>Danger Zone
-    </div>
-    <div class="card-body">
-        @if(Auth::user()->role->role_name !== 'directress')
-        <p class="text-muted small mb-3">
-            Deactivating your account will log you out immediately.
-            You will need an administrator to reactivate it.
-        </p>
-        <button type="button" class="btn btn-outline-danger btn-sm"
-                data-bs-toggle="modal" data-bs-target="#deactivateModal">
-            <i class="bi bi-person-x me-1"></i>Deactivate My Account
-        </button>
-        @else
-        <p class="text-muted small mb-0 fst-italic">
-            <i class="bi bi-lock me-1"></i>
-            The Directress account cannot be self-deactivated for security reasons.
-        </p>
-        @endif
-    </div>
-</div>
-
-@if(Auth::user()->role->role_name !== 'directress')
-<div class="modal fade" id="deactivateModal" tabindex="-1">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header border-0 pb-0">
-                <h6 class="modal-title text-danger fw-bold">Deactivate Account</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body small text-muted">
-                Are you sure? You will be logged out immediately and will need an
-                administrator to reactivate your account.
-            </div>
-            <div class="modal-footer border-0 pt-0">
-                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form method="POST" action="{{ route('admin.profile.deactivate') }}" class="d-inline">
-                    @csrf @method('DELETE')
-                    <button class="btn btn-sm btn-danger">
-                        <i class="bi bi-person-x me-1"></i>Yes, Deactivate
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-@endif
 
 <script>
 document.getElementById('middleNameInput').addEventListener('input', function () {

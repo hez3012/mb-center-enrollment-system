@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
 use Illuminate\Database\Eloquent\SoftDeletes;
+use Carbon\Carbon;
 
 class User extends Authenticatable
 {
@@ -13,9 +14,12 @@ class User extends Authenticatable
     protected $primaryKey = 'user_id';
 
     protected $fillable = [
-        'first_name', 'last_name', 'email',
-        'username', 'password', 'is_active',
-        'failed_attempts', 'locked_until', 'role_id',
+        'first_name', 'middle_name', 'last_name',
+        'birthdate', 'contact_number_1', 'contact_number_2',
+        'region', 'province', 'city',
+        'house_unit_no', 'street', 'barangay', 'zip_code',
+        'email', 'username', 'password',
+        'is_active', 'failed_attempts', 'locked_until', 'role_id',
     ];
 
     protected $hidden = ['password'];
@@ -24,12 +28,10 @@ class User extends Authenticatable
         'is_active'       => 'boolean',
         'locked_until'    => 'datetime',
         'failed_attempts' => 'integer',
+        'birthdate'       => 'date',
     ];
 
-    public function getRememberTokenName()
-    {
-        return null;
-    }
+    public function getRememberTokenName() { return null; }
 
     public function role()
     {
@@ -41,10 +43,8 @@ class User extends Authenticatable
         return $this->belongsToMany(
             Permission::class,
             'user_permissions',
-            'user_id',
-            'permission_id',
-            'user_id',
-            'permission_id'
+            'user_id', 'permission_id',
+            'user_id', 'permission_id'
         );
     }
 
@@ -53,9 +53,53 @@ class User extends Authenticatable
         return $this->hasMany(AuditLog::class, 'user_id', 'user_id');
     }
 
-    public function getFullNameAttribute()
+    public function guardian()
     {
-        return $this->first_name . ' ' . $this->last_name;
+        return $this->hasOne(Guardian::class, 'user_id', 'user_id');
+    }
+
+    // "Juan D. Dela Cruz"
+    public function getFullNameAttribute(): string
+    {
+        $mi = $this->middle_name
+            ? ' ' . strtoupper(substr($this->middle_name, 0, 1)) . '. '
+            : ' ';
+        return $this->first_name . $mi . $this->last_name;
+    }
+
+    // "Dela Cruz, Juan D."
+    public function getListNameAttribute(): string
+    {
+        $mi = $this->middle_name
+            ? ' ' . strtoupper(substr($this->middle_name, 0, 1)) . '.'
+            : '';
+        return $this->last_name . ', ' . $this->first_name . $mi;
+    }
+
+    // "D."
+    public function getMiddleInitialAttribute(): string
+    {
+        return $this->middle_name
+            ? strtoupper(substr($this->middle_name, 0, 1)) . '.'
+            : '';
+    }
+
+    public function getAgeAttribute(): ?int
+    {
+        return $this->birthdate ? Carbon::parse($this->birthdate)->age : null;
+    }
+
+    public function getFullAddressAttribute(): string
+    {
+        return collect([
+            $this->house_unit_no,
+            $this->street,
+            $this->barangay,
+            $this->city,
+            $this->province,
+            $this->region,
+            $this->zip_code,
+        ])->filter()->implode(', ');
     }
 
     public function hasRole(string $roleName): bool

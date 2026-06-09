@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>@yield('title', 'Dashboard') — H.O.P.E.</title>
+    <title>@yield('title', 'Guardian Portal') — H.O.P.E.</title>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css">
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css">
     <style>
@@ -70,46 +70,19 @@
 <div class="sidebar">
     <div class="brand">
         <div class="fw-bold text-primary" style="font-size:1rem;">H.O.P.E.</div>
-        <div class="text-muted" style="font-size:0.75rem;">M.B. Therapy Center</div>
+        <div class="text-muted" style="font-size:0.75rem;">Guardian Portal</div>
     </div>
 
     <nav class="nav flex-column pt-2">
-
-        {{-- Dashboard --}}
-        <a href="{{ route('admin.dashboard') }}"
-           class="nav-link {{ request()->routeIs('admin.dashboard') ? 'active' : '' }}">
+        <a href="{{ route('portal.dashboard') }}"
+           class="nav-link {{ request()->routeIs('portal.dashboard') ? 'active' : '' }}">
             <i class="bi bi-speedometer2 me-2"></i>Dashboard
         </a>
-
-        {{-- User Management --}}
-        @if(Auth::user()->hasPermission('view_user'))
-        <a href="{{ route('admin.users.index') }}"
-           class="nav-link {{ request()->routeIs('admin.users.*') ? 'active' : '' }}">
-            <i class="bi bi-people me-2"></i>User Management
-        </a>
-        @endif
-
-        {{-- Guardian Management --}}
-        @if(Auth::user()->hasPermission('view_guardian'))
-        <a href="{{ route('admin.guardians.index') }}"
-           class="nav-link {{ request()->routeIs('admin.guardians.*') ? 'active' : '' }}">
-            <i class="bi bi-person-heart me-2"></i>Guardian Management
-        </a>
-        @endif
-
-        {{-- Student Management --}}
-        @if(Auth::user()->hasPermission('view_student'))
-        <a href="{{ route('admin.students.index') }}"
-           class="nav-link {{ request()->routeIs('admin.students.*') ? 'active' : '' }}">
-            <i class="bi bi-mortarboard me-2"></i>Student Management
-        </a>
-        @endif
-
     </nav>
 
     <div class="sidebar-bottom">
-        <a href="{{ route('admin.profile.edit') }}"
-           class="nav-link {{ request()->routeIs('admin.profile.*') ? 'active' : '' }}">
+        <a href="{{ route('portal.profile.edit') }}"
+           class="nav-link {{ request()->routeIs('portal.profile.*') ? 'active' : '' }}">
             <i class="bi bi-person-gear me-2"></i>Profile Settings
         </a>
         <form method="POST" action="{{ route('logout') }}">
@@ -127,19 +100,7 @@
     <span class="fw-semibold text-muted small">@yield('title', 'Dashboard')</span>
     <div class="d-flex align-items-center gap-2">
         <span class="text-muted small">{{ Auth::user()->full_name }}</span>
-        @php
-            $roleColors = [
-                'directress' => 'danger',
-                'admin'      => 'primary',
-                'teacher'    => 'success',
-                'staff'      => 'info',
-                'guardian'   => 'secondary',
-            ];
-            $roleName = Auth::user()->role?->role_name;
-        @endphp
-        <span class="badge bg-{{ $roleColors[$roleName] ?? 'secondary' }} role-badge">
-            {{ ucfirst($roleName) }}
-        </span>
+        <span class="badge bg-secondary role-badge">Guardian</span>
     </div>
 </div>
 

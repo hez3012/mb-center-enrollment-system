@@ -1,35 +1,74 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>H.O.P.E. — Guardian Portal</title>
-    @vite(['resources/sass/app.scss', 'resources/js/app.js'])
-</head>
-<body>
+@extends('portal.layouts.app')
+@section('title', 'Dashboard')
+@section('content')
 
-<nav class="navbar navbar-expand-lg navbar-dark bg-success">
-    <div class="container-fluid">
-        <span class="navbar-brand fw-bold">H.O.P.E.</span>
-        <div class="ms-auto d-flex align-items-center gap-3">
-            <span class="text-white small">{{ Auth::user()->full_name }}</span>
-            <form method="POST" action="{{ route('logout') }}">
-                @csrf
-                <button type="submit" class="btn btn-sm btn-outline-light">
-                    <i class="bi bi-box-arrow-right me-1"></i>Logout
-                </button>
-            </form>
+<h5 class="fw-bold mb-4">Welcome, {{ Auth::user()->first_name }}!</h5>
+
+@if($guardian)
+<div class="row g-3">
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="card-body">
+                <i class="bi bi-mortarboard fs-2 text-primary"></i>
+                <h3 class="fw-bold mt-2 mb-0">{{ $students->count() }}</h3>
+                <small class="text-muted">Linked Students</small>
+            </div>
         </div>
     </div>
-</nav>
-
-<div class="container mt-4">
-    <h5 class="fw-bold">Guardian Portal</h5>
-    <p class="text-muted">Welcome, {{ Auth::user()->full_name }}!</p>
-    <div class="alert alert-success">
-        Phase 1 complete — Guardian portal is working! ✅
+    <div class="col-md-4">
+        <div class="card border-0 shadow-sm text-center py-3">
+            <div class="card-body">
+                <i class="bi bi-check-circle fs-2 text-success"></i>
+                <h3 class="fw-bold mt-2 mb-0">{{ $students->where('status','active')->count() }}</h3>
+                <small class="text-muted">Active Students</small>
+            </div>
+        </div>
     </div>
 </div>
 
-</body>
-</html>
+@if($students->count() > 0)
+<div class="card border-0 shadow-sm mt-4">
+    <div class="card-header bg-white fw-semibold">
+        <i class="bi bi-people me-1"></i>My Students
+    </div>
+    <div class="card-body p-0">
+        <table class="table table-hover mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Full Name</th>
+                    <th>Program</th>
+                    <th>Disabilities</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach($students as $student)
+                <tr>
+                    <td>{{ $student->list_name }}</td>
+                    <td>{{ $student->programLevel?->program_name ?? '—' }}</td>
+                    <td>
+                        @foreach($student->disabilities as $d)
+                            <span class="badge bg-info text-dark">{{ $d->disability_name }}</span>
+                        @endforeach
+                    </td>
+                    <td>
+                        @php $sc = ['active'=>'success','inactive'=>'secondary','withdrawn'=>'warning','completed'=>'primary']; @endphp
+                        <span class="badge bg-{{ $sc[$student->status] ?? 'secondary' }}">
+                            {{ ucfirst($student->status) }}
+                        </span>
+                    </td>
+                </tr>
+                @endforeach
+            </tbody>
+        </table>
+    </div>
+</div>
+@endif
+
+@else
+<div class="alert alert-warning">
+    <i class="bi bi-exclamation-triangle me-1"></i>
+    Your guardian profile is not fully set up yet. Please contact the administrator.
+</div>
+@endif
+@endsection
