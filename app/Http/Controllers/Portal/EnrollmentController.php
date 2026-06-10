@@ -81,19 +81,25 @@ class EnrollmentController extends Controller
         $user     = Auth::user();
         $guardian = $user->guardian;
 
+        // Validate non-file fields only
         $request->validate([
-            'student_id'       => 'required|exists:student,student_id',
-            'school_year_id'   => 'required|exists:school_year,school_year_id',
-            'program_level_id' => 'required|exists:program_level,program_level_id',
-            'waiver_signed'    => 'accepted',
-            'doc_file.*'       => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
+            'student_id'     => 'required|exists:student,student_id',
+            'school_year_id' => 'required|exists:school_year,school_year_id',
+            'waiver_signed'  => 'accepted',
         ]);
 
-        // Make sure the student belongs to this guardian
+        // Ensure student belongs to this guardian
         $studentBelongs = $guardian?->students->contains('student_id', $request->student_id);
-
         if (!$studentBelongs) {
             return back()->with('error', 'Invalid student selection.')->withInput();
+        }
+
+        // Get program level from student record
+        $student = \App\Models\Student::find($request->student_id);
+        if (!$student || !$student->program_level_id) {
+            return back()
+                ->with('error', 'This student does not have a program level assigned. Please contact the administrator.')
+                ->withInput();
         }
 
         // Check duplicate enrollment
@@ -109,10 +115,27 @@ class EnrollmentController extends Controller
                 ->withInput();
         }
 
+        // Pre-validate file types BEFORE creating any records
+        $documentTypes = \App\Models\DocumentType::all();
+        $allowedMimes  = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
+
+        foreach ($documentTypes as $docType) {
+            $key = "doc_file.{$docType->document_type_id}";
+            if ($request->hasFile($key)) {
+                $detectedMime = strtolower($request->file($key)->getMimeType() ?? '');
+                if (!in_array($detectedMime, $allowedMimes)) {
+                    return back()
+                        ->with('error', "Invalid file type for \"{$docType->document_name}\". Only JPG, PNG, or PDF files are accepted.")
+                        ->withInput();
+                }
+            }
+        }
+
+        // Create enrollment
         $enrollment = Enrollment::create([
             'student_id'       => $request->student_id,
             'school_year_id'   => $request->school_year_id,
-            'program_level_id' => $request->program_level_id,
+            'program_level_id' => $student->program_level_id,
             'enrollment_date'  => now()->toDateString(),
             'enrollment_type'  => 'online',
             'status'           => 'pending',
@@ -120,24 +143,24 @@ class EnrollmentController extends Controller
             'processed_by'     => null,
         ]);
 
-        // Save uploaded documents
-        $documentTypes = DocumentType::all();
+        // Store files
         foreach ($documentTypes as $docType) {
             $filePath         = null;
             $submissionStatus = 'pending';
+            $key              = "doc_file.{$docType->document_type_id}";
 
-            if ($request->hasFile("doc_file.{$docType->document_type_id}")) {
-                $filePath = $request->file("doc_file.{$docType->document_type_id}")
+            if ($request->hasFile($key)) {
+                $filePath = $request->file($key)
                     ->store("enrollment_docs/{$enrollment->enrollment_id}", 'public');
                 $submissionStatus = 'submitted';
             }
 
             EnrollmentDocument::create([
-                'enrollment_id'    => $enrollment->enrollment_id,
-                'document_type_id' => $docType->document_type_id,
+                'enrollment_id'     => $enrollment->enrollment_id,
+                'document_type_id'  => $docType->document_type_id,
                 'submission_status' => $submissionStatus,
-                'file_path'        => $filePath,
-                'submission_date'  => $filePath ? now()->toDateString() : null,
+                'file_path'         => $filePath,
+                'submission_date'   => $filePath ? now()->toDateString() : null,
             ]);
         }
 

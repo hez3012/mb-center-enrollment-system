@@ -19,11 +19,32 @@
 @else
 <div class="card border-0 shadow-sm">
     <div class="card-body">
+
+        {{-- Global error display --}}
+        @if($errors->any())
+        <div class="alert alert-danger">
+            <p class="fw-semibold mb-1">
+                <i class="bi bi-exclamation-circle me-1"></i>
+                Please fix the following before submitting:
+            </p>
+            <ul class="mb-0 small">
+                @foreach($errors->all() as $error)
+                    <li>{{ $error }}</li>
+                @endforeach
+            </ul>
+        </div>
+        @endif
+
+        @if(session('error'))
+        <div class="alert alert-danger">
+            <i class="bi bi-exclamation-circle me-1"></i>{{ session('error') }}
+        </div>
+        @endif
+
         <form method="POST" action="{{ route('portal.enrollments.store') }}"
               enctype="multipart/form-data">
             @csrf
 
-            {{-- Enrollment Information --}}
             <p class="fw-semibold text-primary small mb-2">
                 <i class="bi bi-clipboard-check me-1"></i>Enrollment Information
             </p>
@@ -35,7 +56,6 @@
                         <option value="">-- Select Student --</option>
                         @foreach($students as $student)
                             <option value="{{ $student->student_id }}"
-                                    data-program="{{ $student->program_level_id }}"
                                     {{ old('student_id') == $student->student_id ? 'selected' : '' }}>
                                 {{ $student->full_name }}
                             </option>
@@ -48,18 +68,16 @@
                     @if($currentYear)
                         <input type="text" class="form-control bg-light" readonly
                                value="{{ $currentYear->year_label }}">
-                        <input type="hidden" name="school_year_id" value="{{ $currentYear->school_year_id }}">
+                        <input type="hidden" name="school_year_id"
+                               value="{{ $currentYear->school_year_id }}">
                     @else
                         <input type="text" class="form-control bg-light" readonly
                                value="No active school year">
                         <small class="text-danger">Please contact the administrator.</small>
                     @endif
                 </div>
-                <input type="hidden" name="program_level_id" id="programLevelHidden"
-                       value="{{ old('program_level_id') }}">
             </div>
 
-            {{-- Required Documents --}}
             @php
                 $requiredDocs = $documentTypes->where('is_required', true);
                 $optionalDocs = $documentTypes->where('is_required', false);
@@ -73,7 +91,6 @@
             <div class="border rounded p-3 mb-3">
                 <p class="text-muted small mb-3">
                     The following documents are <strong>required</strong> for enrollment.
-                    Please upload a clear photo or scanned copy of each.
                 </p>
                 @foreach($requiredDocs as $docType)
                 <div class="border border-warning rounded p-3 mb-2">
@@ -85,7 +102,7 @@
                            name="doc_file[{{ $docType->document_type_id }}]"
                            class="form-control form-control-sm"
                            accept=".pdf,.jpg,.jpeg,.png">
-                    <small class="text-muted">JPG, PNG, or PDF only · Max 5MB</small>
+                    <small class="text-muted">JPG, PNG, or PDF only · Max 10MB</small>
                 </div>
                 @endforeach
             </div>
@@ -97,9 +114,7 @@
             </p>
             <div class="border rounded p-3 mb-4">
                 <p class="text-muted small mb-3">
-                    The following documents are <strong>optional</strong> but recommended if available
-                    (e.g., from a previous center or therapy program).
-                    You may still submit your enrollment without these.
+                    The following are <strong>optional</strong> but recommended if available.
                 </p>
                 @foreach($optionalDocs as $docType)
                 <div class="border rounded p-3 mb-2">
@@ -111,18 +126,16 @@
                            name="doc_file[{{ $docType->document_type_id }}]"
                            class="form-control form-control-sm"
                            accept=".pdf,.jpg,.jpeg,.png">
-                    <small class="text-muted">JPG, PNG, or PDF only · Max 5MB</small>
+                    <small class="text-muted">JPG, PNG, or PDF only · Max 10MB</small>
                 </div>
                 @endforeach
             </div>
             @endif
 
-            {{-- Waiver & Data Privacy --}}
             <p class="fw-semibold text-primary small mb-2">
                 <i class="bi bi-shield-check me-1"></i>Waiver & Data Privacy Notice
             </p>
             <div class="border rounded p-3 mb-4 bg-light">
-
                 <button type="button" class="btn btn-sm btn-outline-secondary mb-3"
                         id="dpaToggle">
                     <i class="bi bi-eye me-1"></i>View Data Privacy Notice
@@ -197,8 +210,7 @@
             @if(!$currentYear)
             <div class="alert alert-warning">
                 <i class="bi bi-exclamation-triangle me-1"></i>
-                There is no active school year configured at this time.
-                Please contact the administrator before submitting.
+                There is no active school year configured. Please contact the administrator.
             </div>
             @else
             <button type="submit" class="btn btn-primary">
@@ -211,13 +223,8 @@
 </div>
 
 <script>
-document.getElementById('studentSelect').addEventListener('change', function() {
-    var opt = this.options[this.selectedIndex];
-    document.getElementById('programLevelHidden').value = opt ? (opt.dataset.program || '') : '';
-});
-
 document.getElementById('dpaToggle').addEventListener('click', function() {
-    var content = document.getElementById('dpaContent');
+    var content  = document.getElementById('dpaContent');
     var isHidden = content.style.display === 'none';
     content.style.display = isHidden ? '' : 'none';
     this.innerHTML = isHidden

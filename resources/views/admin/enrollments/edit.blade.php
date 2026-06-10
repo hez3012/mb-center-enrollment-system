@@ -4,7 +4,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0">Edit Enrollment</h5>
-    <a href="{{ route('admin.enrollments.show', $enrollment->enrollment_id) }}"
+    <a href="{{ route('admin.enrollments.index') }}"
        class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-arrow-left me-1"></i>Back
     </a>

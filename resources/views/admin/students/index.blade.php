@@ -5,13 +5,12 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0">Student Management</h5>
     @if(Auth::user()->hasPermission('create_student'))
-    <a href="{{ route('admin.students.create') }}" class="btn btn-primary btn-sm">
-        <i class="bi bi-person-plus me-1"></i>Add New Student
-    </a>
+        <a href="{{ route('admin.students.create') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-person-plus me-1"></i>Add New Student
+        </a>
     @endif
 </div>
 
-{{-- Search & Filter Bar --}}
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-2">
         <div class="row g-2 align-items-center">
@@ -21,6 +20,7 @@
             </div>
             <div class="col-md-2">
                 <select id="sortSelect" class="form-select form-select-sm">
+                    <option value="default">Default (by Status)</option>
                     <option value="az">A–Z Name</option>
                     <option value="za">Z–A Name</option>
                     <option value="created">Date Created</option>
@@ -77,72 +77,102 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse($students as $student)
-                <tr data-name="{{ strtolower($student->last_name) }}"
-                    data-created="{{ $student->created_at?->timestamp ?? 0 }}"
-                    data-modified="{{ $student->updated_at?->timestamp ?? 0 }}"
-                    data-program="{{ $student->program_level_id }}"
-                    data-status="{{ $student->status }}"
-                    data-disabilities="{{ $student->disabilities->pluck('disability_id')->implode(',') }}"
-                    data-search="{{ strtolower($student->list_name . ' ' . ($student->guardian?->full_name ?? '')) }}">
-                    <td>{{ $student->student_id }}</td>
-                    <td>{{ $student->list_name }}</td>
-                    <td>{{ $student->guardian?->full_name ?? '—' }}</td>
-                    <td>{{ $student->programLevel?->program_name ?? '—' }}</td>
-                    <td>
-                        @foreach($student->disabilities as $d)
-                            <span class="badge bg-info text-dark">{{ $d->disability_name }}</span>
+                @php
+                    $statusGroups = [
+                        ['key' => 'active',    'label' => 'Active',    'icon' => 'bi-person-check',  'class' => 'table-success',
+                         'students' => $students->where('status', 'active')],
+                        ['key' => 'inactive',  'label' => 'Inactive',  'icon' => 'bi-person-dash',   'class' => 'table-secondary',
+                         'students' => $students->where('status', 'inactive')],
+                        ['key' => 'withdrawn', 'label' => 'Withdrawn', 'icon' => 'bi-person-x',      'class' => 'table-warning',
+                         'students' => $students->where('status', 'withdrawn')],
+                        ['key' => 'completed', 'label' => 'Completed', 'icon' => 'bi-patch-check',   'class' => 'table-primary',
+                         'students' => $students->where('status', 'completed')],
+                    ];
+                @endphp
+
+                @if($students->isEmpty())
+                    <tr id="noDataRow">
+                        <td colspan="7" class="text-center text-muted py-4">
+                            <i class="bi bi-mortarboard d-block mb-2" style="font-size:1.5rem;"></i>
+                            No students found.
+                        </td>
+                    </tr>
+                @endif
+
+                @foreach($statusGroups as $group)
+                    @if($group['students']->isNotEmpty())
+                        <tr class="category-header {{ $group['class'] }}"
+                            data-category="{{ $group['key'] }}">
+                            <td colspan="7" class="py-2 px-3 fw-semibold small">
+                                <i class="bi {{ $group['icon'] }} me-1"></i>
+                                {{ $group['label'] }}
+                            </td>
+                        </tr>
+                        @foreach($group['students'] as $student)
+                            @php
+                                $sc = ['active'=>'success','inactive'=>'secondary','withdrawn'=>'warning','completed'=>'primary'];
+                            @endphp
+                            <tr data-name="{{ strtolower($student->last_name) }}"
+                                data-created="{{ $student->created_at?->timestamp ?? 0 }}"
+                                data-modified="{{ $student->updated_at?->timestamp ?? 0 }}"
+                                data-program="{{ $student->program_level_id }}"
+                                data-status="{{ $student->status }}"
+                                data-disabilities="{{ $student->disabilities->pluck('disability_id')->implode(',') }}"
+                                data-search="{{ strtolower($student->list_name . ' ' . optional($student->guardian)->full_name) }}">
+                                <td>{{ $student->student_id }}</td>
+                                <td>{{ $student->list_name }}</td>
+                                <td>{{ optional($student->guardian)->full_name ?? '—' }}</td>
+                                <td>{{ optional($student->programLevel)->program_name ?? '—' }}</td>
+                                <td>
+                                    @foreach($student->disabilities as $d)
+                                        <span class="badge bg-info text-dark">{{ $d->disability_name }}</span>
+                                    @endforeach
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ $sc[$student->status] ?? 'secondary' }}">
+                                        {{ ucfirst($student->status) }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1">
+                                        @if(Auth::user()->hasPermission('view_student'))
+                                            <a href="{{ route('admin.students.show', $student->student_id) }}"
+                                               class="btn btn-sm btn-outline-info" title="View">
+                                                <i class="bi bi-eye"></i>
+                                            </a>
+                                        @endif
+                                        @if(Auth::user()->hasPermission('edit_student'))
+                                            <a href="{{ route('admin.students.edit', $student->student_id) }}"
+                                               class="btn btn-sm btn-outline-primary" title="Edit">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                        @endif
+                                        @if(Auth::user()->hasPermission('delete_student'))
+                                            <button class="btn btn-sm btn-outline-danger" title="Delete"
+                                                    data-id="{{ $student->student_id }}"
+                                                    data-name="{{ $student->list_name }}"
+                                                    onclick="confirmDelete(this.dataset.id, this.dataset.name)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
                         @endforeach
-                    </td>
-                    <td>
-                        @php
-                            $sc = ['active'=>'success','inactive'=>'secondary','withdrawn'=>'warning','completed'=>'primary'];
-                        @endphp
-                        <span class="badge bg-{{ $sc[$student->status] ?? 'secondary' }}">
-                            {{ ucfirst($student->status) }}
-                        </span>
-                    </td>
-                    <td>
-                        <div class="d-flex gap-1">
-                            @if(Auth::user()->hasPermission('view_student'))
-                            <a href="{{ route('admin.students.show', $student->student_id) }}"
-                               class="btn btn-sm btn-outline-info" title="View">
-                                <i class="bi bi-eye"></i>
-                            </a>
-                            @endif
-                            @if(Auth::user()->hasPermission('edit_student'))
-                            <a href="{{ route('admin.students.edit', $student->student_id) }}"
-                               class="btn btn-sm btn-outline-primary" title="Edit">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            @endif
-                            @if(Auth::user()->hasPermission('delete_student'))
-                            {{-- data attributes keep onclick free of Blade syntax --}}
-                            <button class="btn btn-sm btn-outline-danger"
-                                    title="Delete"
-                                    data-id="{{ $student->student_id }}"
-                                    data-name="{{ $student->list_name }}"
-                                    onclick="confirmDelete(this.dataset.id, this.dataset.name)">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                            @endif
-                        </div>
-                    </td>
-                </tr>
-                @empty
-                <tr>
-                    <td colspan="7" class="text-center text-muted py-3">No students found.</td>
-                </tr>
-                @endforelse
+                        <tr class="category-spacer">
+                            <td colspan="7" style="height:10px; border:none; padding:0;"></td>
+                        </tr>
+                    @endif
+                @endforeach
             </tbody>
         </table>
-        <div id="noResults" class="text-center text-muted py-3" style="display:none;">
+        <div id="noResults" class="text-center text-muted py-4" style="display:none;">
+            <i class="bi bi-search d-block mb-2" style="font-size:1.5rem;"></i>
             No students match your search.
         </div>
     </div>
 </div>
 
-{{-- Delete Modal --}}
 <div class="modal fade" id="deleteModal" tabindex="-1">
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
@@ -158,7 +188,8 @@
             <div class="modal-footer border-0 pt-0">
                 <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <form id="deleteForm" method="POST" class="d-inline">
-                    @csrf @method('DELETE')
+                    @csrf
+                    @method('DELETE')
                     <button class="btn btn-sm btn-danger">
                         <i class="bi bi-trash me-1"></i>Delete
                     </button>
@@ -168,7 +199,6 @@
     </div>
 </div>
 
-{{-- Pure JavaScript — zero Blade directives inside --}}
 <script>
 var searchInput      = document.getElementById('searchInput');
 var sortSelect       = document.getElementById('sortSelect');
@@ -183,20 +213,35 @@ function applyFilters() {
     var program    = programFilter.value;
     var disability = disabilityFilter.value;
     var status     = statusFilter.value;
+    var hasFilter  = search !== '' || program !== '' || disability !== '' || status !== '' || sort !== 'default';
 
-    var rows = Array.from(tbody.querySelectorAll('tr[data-search]'));
+    var categoryHeaders = Array.from(tbody.querySelectorAll('tr.category-header'));
+    var categorySpacers = Array.from(tbody.querySelectorAll('tr.category-spacer'));
+    var dataRows        = Array.from(tbody.querySelectorAll('tr[data-search]'));
+    var noResultsDiv    = document.getElementById('noResults');
 
-    rows.forEach(function(row) {
+    if (!hasFilter) {
+        categoryHeaders.forEach(function(h) { h.style.display = ''; });
+        categorySpacers.forEach(function(s) { s.style.display = ''; });
+        dataRows.forEach(function(r) { r.style.display = ''; });
+        noResultsDiv.style.display = 'none';
+        return;
+    }
+
+    categoryHeaders.forEach(function(h) { h.style.display = 'none'; });
+    categorySpacers.forEach(function(s) { s.style.display = 'none'; });
+
+    dataRows.forEach(function(row) {
         var show = true;
-        if (search     && !(row.dataset.search || '').includes(search))               { show = false; }
-        if (program    && row.dataset.program !== program)                             { show = false; }
-        if (status     && row.dataset.status  !== status)                             { show = false; }
-        if (disability && !row.dataset.disabilities.split(',').includes(disability))   { show = false; }
+        if (search     && !(row.dataset.search || '').includes(search))              { show = false; }
+        if (program    && row.dataset.program !== program)                           { show = false; }
+        if (status     && row.dataset.status  !== status)                           { show = false; }
+        if (disability && !row.dataset.disabilities.split(',').includes(disability)) { show = false; }
         row.style.display = show ? '' : 'none';
     });
 
-    var visible = rows.filter(function(r) { return r.style.display !== 'none'; });
-    document.getElementById('noResults').style.display = visible.length === 0 ? '' : 'none';
+    var visible = dataRows.filter(function(r) { return r.style.display !== 'none'; });
+    noResultsDiv.style.display = (visible.length === 0) ? '' : 'none';
 
     visible.sort(function(a, b) {
         if (sort === 'az')       return (a.dataset.name || '').localeCompare(b.dataset.name || '');
@@ -210,7 +255,7 @@ function applyFilters() {
 
 function clearFilters() {
     searchInput.value      = '';
-    sortSelect.value       = 'az';
+    sortSelect.value       = 'default';
     programFilter.value    = '';
     disabilityFilter.value = '';
     statusFilter.value     = '';
@@ -226,6 +271,7 @@ function confirmDelete(id, name) {
 [searchInput, sortSelect, programFilter, disabilityFilter, statusFilter].forEach(function(el) {
     el.addEventListener('input', applyFilters);
 });
+
 applyFilters();
 </script>
 @endsection

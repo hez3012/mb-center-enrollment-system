@@ -5,12 +5,6 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0">Enrollment Details</h5>
     <div class="d-flex gap-2">
-        @if(Auth::user()->hasPermission('edit_enrollment'))
-        <a href="{{ route('admin.enrollments.edit', $enrollment->enrollment_id) }}"
-           class="btn btn-sm btn-outline-primary">
-            <i class="bi bi-pencil me-1"></i>Edit
-        </a>
-        @endif
         <a href="{{ route('admin.enrollments.index') }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i>Back
         </a>

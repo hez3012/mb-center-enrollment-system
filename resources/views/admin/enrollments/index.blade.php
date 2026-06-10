@@ -5,23 +5,23 @@
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0">Enrollment Management</h5>
     @if(Auth::user()->hasPermission('create_enrollment'))
-    <a href="{{ route('admin.enrollments.create') }}" class="btn btn-primary btn-sm">
-        <i class="bi bi-plus-circle me-1"></i>Add Walk-in Enrollment
-    </a>
+        <a href="{{ route('admin.enrollments.create') }}" class="btn btn-primary btn-sm">
+            <i class="bi bi-plus-circle me-1"></i>Add Walk-in Enrollment
+        </a>
     @endif
 </div>
 
 @if(session('success'))
-<div class="alert alert-success alert-dismissible fade show">
-    <i class="bi bi-check-circle me-2"></i>{{ session('success') }}
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
+    <div class="alert alert-success alert-dismissible fade show">
+        <i class="bi bi-check-circle me-2"></i>{{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
 @endif
 @if(session('error'))
-<div class="alert alert-danger alert-dismissible fade show">
-    <i class="bi bi-exclamation-circle me-2"></i>{{ session('error') }}
-    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-</div>
+    <div class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-circle me-2"></i>{{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
 @endif
 
 <div class="card border-0 shadow-sm mb-3">
@@ -46,9 +46,9 @@
                     <option value="pending_payment">Pending Payment</option>
                     <option value="payment_confirmed">Payment Confirmed</option>
                     <option value="enrolled">Enrolled</option>
-                    <option value="rejected">Rejected</option>
-                    <option value="withdrawn">Withdrawn</option>
                     <option value="completed">Completed</option>
+                    <option value="withdrawn">Withdrawn</option>
+                    <option value="rejected">Rejected</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -60,6 +60,7 @@
             </div>
             <div class="col-md-2">
                 <select id="sortSelect" class="form-select form-select-sm">
+                    <option value="default">Default (by Status)</option>
                     <option value="newest">Newest First</option>
                     <option value="oldest">Oldest First</option>
                     <option value="az">A–Z Name</option>
@@ -92,58 +93,117 @@
                 </tr>
             </thead>
             <tbody>
-                @forelse($enrollments as $enrollment)
-                <tr data-name="{{ strtolower($enrollment->student?->last_name ?? '') }}"
-                    data-created="{{ $enrollment->created_at?->timestamp ?? 0 }}"
-                    data-year="{{ $enrollment->school_year_id }}"
-                    data-status="{{ $enrollment->status }}"
-                    data-type="{{ $enrollment->enrollment_type }}"
-                    data-search="{{ strtolower($enrollment->student?->list_name ?? '') }}">
-                    <td>{{ $enrollment->enrollment_id }}</td>
-                    <td>{{ $enrollment->student?->list_name ?? '—' }}</td>
-                    <td>{{ $enrollment->schoolYear?->year_label ?? '—' }}</td>
-                    <td>{{ $enrollment->programLevel?->program_name ?? '—' }}</td>
-                    <td>
-                        <span class="badge bg-{{ $enrollment->enrollment_type === 'walk_in' ? 'secondary' : 'info text-dark' }}">
-                            {{ $enrollment->type_label }}
-                        </span>
-                    </td>
-                    <td>
-                        <span class="badge bg-{{ $enrollment->status_badge }}">
-                            {{ $enrollment->status_label }}
-                        </span>
-                    </td>
-                    <td>{{ $enrollment->enrollment_date?->format('m/d/Y') ?? '—' }}</td>
-                    <td>
-                        <div class="d-flex gap-1">
-                            <a href="{{ route('admin.enrollments.show', $enrollment->enrollment_id) }}"
-                               class="btn btn-sm btn-outline-info" title="View">
-                                <i class="bi bi-eye"></i>
-                            </a>
-                            @if(Auth::user()->hasPermission('edit_enrollment'))
-                            <a href="{{ route('admin.enrollments.edit', $enrollment->enrollment_id) }}"
-                               class="btn btn-sm btn-outline-primary" title="Edit">
-                                <i class="bi bi-pencil"></i>
-                            </a>
-                            @endif
-                            @if(Auth::user()->hasPermission('delete_enrollment'))
-                            <button class="btn btn-sm btn-outline-danger" title="Delete"
-                                    data-id="{{ $enrollment->enrollment_id }}"
-                                    onclick="confirmDelete(this.dataset.id)">
-                                <i class="bi bi-trash"></i>
-                            </button>
-                            @endif
-                        </div>
-                    </td>
-                </tr>
-                @empty
-                <tr id="noDataRow">
-                    <td colspan="8" class="text-center text-muted py-4">
-                        <i class="bi bi-clipboard-x d-block mb-2" style="font-size:1.5rem;"></i>
-                        No enrollments found.
-                    </td>
-                </tr>
-                @endforelse
+                @php
+                    $editableStatuses = ['pending', 'pending_payment', 'payment_confirmed', 'enrolled'];
+
+                    $statusGroups = [
+                        [
+                            'key'   => 'active',
+                            'label' => 'Active Enrollments',
+                            'icon'  => 'bi-clipboard-check',
+                            'class' => 'table-success',
+                            'items' => $enrollments->filter(
+                                fn($e) => in_array($e->status, $editableStatuses)
+                            ),
+                        ],
+                        [
+                            'key'   => 'completed',
+                            'label' => 'Completed',
+                            'icon'  => 'bi-patch-check',
+                            'class' => 'table-primary',
+                            'items' => $enrollments->filter(fn($e) => $e->status === 'completed'),
+                        ],
+                        [
+                            'key'   => 'withdrawn',
+                            'label' => 'Withdrawn — History',
+                            'icon'  => 'bi-clipboard-x',
+                            'class' => 'table-warning',
+                            'items' => $enrollments->filter(fn($e) => $e->status === 'withdrawn'),
+                        ],
+                        [
+                            'key'   => 'rejected',
+                            'label' => 'Rejected — History',
+                            'icon'  => 'bi-x-circle',
+                            'class' => 'table-danger',
+                            'items' => $enrollments->filter(fn($e) => $e->status === 'rejected'),
+                        ],
+                    ];
+                @endphp
+
+                @if($enrollments->isEmpty())
+                    <tr id="noDataRow">
+                        <td colspan="8" class="text-center text-muted py-4">
+                            <i class="bi bi-clipboard-x d-block mb-2" style="font-size:1.5rem;"></i>
+                            No enrollments found.
+                        </td>
+                    </tr>
+                @endif
+
+                @foreach($statusGroups as $group)
+                    @if($group['items']->isNotEmpty())
+                        <tr class="category-header {{ $group['class'] }}"
+                            data-category="{{ $group['key'] }}">
+                            <td colspan="8" class="py-2 px-3 fw-semibold small">
+                                <i class="bi {{ $group['icon'] }} me-1"></i>
+                                {{ $group['label'] }}
+                            </td>
+                        </tr>
+                        @foreach($group['items'] as $enrollment)
+                            <tr data-name="{{ strtolower(optional($enrollment->student)->last_name ?? '') }}"
+                                data-created="{{ $enrollment->created_at ? $enrollment->created_at->timestamp : 0 }}"
+                                data-year="{{ $enrollment->school_year_id }}"
+                                data-status="{{ $enrollment->status }}"
+                                data-type="{{ $enrollment->enrollment_type }}"
+                                data-search="{{ strtolower(optional($enrollment->student)->list_name ?? '') }}">
+                                <td>{{ $enrollment->enrollment_id }}</td>
+                                <td>{{ optional($enrollment->student)->list_name ?? '—' }}</td>
+                                <td>{{ optional($enrollment->schoolYear)->year_label ?? '—' }}</td>
+                                <td>{{ optional($enrollment->programLevel)->program_name ?? '—' }}</td>
+                                <td>
+                                    <span class="badge bg-{{ $enrollment->enrollment_type === 'walk_in' ? 'secondary' : 'info text-dark' }}">
+                                        {{ $enrollment->type_label }}
+                                    </span>
+                                </td>
+                                <td>
+                                    <span class="badge bg-{{ $enrollment->status_badge }}">
+                                        {{ $enrollment->status_label }}
+                                    </span>
+                                </td>
+                                <td>
+                                    {{ $enrollment->enrollment_date
+                                        ? $enrollment->enrollment_date->format('m/d/Y')
+                                        : '—' }}
+                                </td>
+                                <td>
+                                    <div class="d-flex gap-1">
+                                        <a href="{{ route('admin.enrollments.show', $enrollment->enrollment_id) }}"
+                                           class="btn btn-sm btn-outline-info" title="View">
+                                            <i class="bi bi-eye"></i>
+                                        </a>
+                                        {{-- Edit only for active/editable statuses --}}
+                                        @if(in_array($enrollment->status, $editableStatuses) && Auth::user()->hasPermission('edit_enrollment'))
+                                            <a href="{{ route('admin.enrollments.edit', $enrollment->enrollment_id) }}"
+                                               class="btn btn-sm btn-outline-primary" title="Edit">
+                                                <i class="bi bi-pencil"></i>
+                                            </a>
+                                        @endif
+                                        @if(Auth::user()->hasPermission('delete_enrollment'))
+                                            <button class="btn btn-sm btn-outline-danger"
+                                                    title="Delete"
+                                                    data-id="{{ $enrollment->enrollment_id }}"
+                                                    onclick="confirmDelete(this.dataset.id)">
+                                                <i class="bi bi-trash"></i>
+                                            </button>
+                                        @endif
+                                    </div>
+                                </td>
+                            </tr>
+                        @endforeach
+                        <tr class="category-spacer">
+                            <td colspan="8" style="height:10px; border:none; padding:0;"></td>
+                        </tr>
+                    @endif
+                @endforeach
             </tbody>
         </table>
 
@@ -169,7 +229,8 @@
             <div class="modal-footer border-0 pt-0">
                 <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
                 <form id="deleteForm" method="POST" class="d-inline">
-                    @csrf @method('DELETE')
+                    @csrf
+                    @method('DELETE')
                     <button class="btn btn-sm btn-danger">
                         <i class="bi bi-trash me-1"></i>Delete
                     </button>
@@ -193,22 +254,25 @@ function applyFilters() {
     var status    = statusFilter.value;
     var type      = typeFilter.value;
     var sort      = sortSelect.value;
-    var hasFilter = search !== '' || year !== '' || status !== '' || type !== '';
+    var hasFilter = search !== '' || year !== '' || status !== '' || type !== '' || sort !== 'default';
 
-    var allRows      = Array.from(tbody.querySelectorAll('tr[data-search]'));
-    var noDataRow    = document.getElementById('noDataRow');
-    var noResultsDiv = document.getElementById('noResults');
+    var categoryHeaders = Array.from(tbody.querySelectorAll('tr.category-header'));
+    var categorySpacers = Array.from(tbody.querySelectorAll('tr.category-spacer'));
+    var dataRows        = Array.from(tbody.querySelectorAll('tr[data-search]'));
+    var noResultsDiv    = document.getElementById('noResults');
 
-    if (allRows.length === 0) {
+    if (!hasFilter) {
+        categoryHeaders.forEach(function(h) { h.style.display = ''; });
+        categorySpacers.forEach(function(s) { s.style.display = ''; });
+        dataRows.forEach(function(r) { r.style.display = ''; });
         noResultsDiv.style.display = 'none';
         return;
     }
 
-    if (noDataRow) {
-        noDataRow.style.display = 'none';
-    }
+    categoryHeaders.forEach(function(h) { h.style.display = 'none'; });
+    categorySpacers.forEach(function(s) { s.style.display = 'none'; });
 
-    allRows.forEach(function(row) {
+    dataRows.forEach(function(row) {
         var show = true;
         if (search && !(row.dataset.search || '').includes(search)) { show = false; }
         if (year   && row.dataset.year   !== year)                   { show = false; }
@@ -217,17 +281,17 @@ function applyFilters() {
         row.style.display = show ? '' : 'none';
     });
 
-    var visible = allRows.filter(function(r) { return r.style.display !== 'none'; });
-
-    noResultsDiv.style.display = (visible.length === 0 && hasFilter) ? '' : 'none';
+    var visible = dataRows.filter(function(r) { return r.style.display !== 'none'; });
+    noResultsDiv.style.display = (visible.length === 0) ? '' : 'none';
 
     visible.sort(function(a, b) {
-        if (sort === 'newest')  return (b.dataset.created || 0) - (a.dataset.created || 0);
-        if (sort === 'oldest')  return (a.dataset.created || 0) - (b.dataset.created || 0);
-        if (sort === 'az')      return (a.dataset.name || '').localeCompare(b.dataset.name || '');
-        if (sort === 'za')      return (b.dataset.name || '').localeCompare(a.dataset.name || '');
+        if (sort === 'newest') { return (b.dataset.created || 0) - (a.dataset.created || 0); }
+        if (sort === 'oldest') { return (a.dataset.created || 0) - (b.dataset.created || 0); }
+        if (sort === 'az')     { return (a.dataset.name || '').localeCompare(b.dataset.name || ''); }
+        if (sort === 'za')     { return (b.dataset.name || '').localeCompare(a.dataset.name || ''); }
         return 0;
     });
+
     visible.forEach(function(r) { tbody.appendChild(r); });
 }
 
@@ -236,7 +300,7 @@ function clearFilters() {
     yearFilter.value   = '';
     statusFilter.value = '';
     typeFilter.value   = '';
-    sortSelect.value   = 'newest';
+    sortSelect.value   = 'default';
     applyFilters();
 }
 
@@ -251,4 +315,5 @@ function confirmDelete(id) {
 
 applyFilters();
 </script>
+
 @endsection
