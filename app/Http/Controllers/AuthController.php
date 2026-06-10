@@ -13,6 +13,10 @@ class AuthController extends Controller
 {
     public function showLogin()
     {
+        if (Auth::check()) {
+            return $this->redirectToDashboard();
+        }
+
         return view('auth.login');
     }
 
@@ -23,7 +27,6 @@ class AuthController extends Controller
             'password' => 'required|string',
         ]);
 
-        // Detect if input is email or username
         $loginField = filter_var($request->login, FILTER_VALIDATE_EMAIL)
             ? 'email'
             : 'username';
@@ -35,7 +38,6 @@ class AuthController extends Controller
 
         $user = User::where($loginField, $request->login)->first();
 
-        // User not found
         if (!$user) {
             Log::warning('Login failed: user not found', ['login' => $request->login]);
             return back()
@@ -43,7 +45,6 @@ class AuthController extends Controller
                 ->withInput();
         }
 
-        // Account inactive
         if (!$user->is_active) {
             Log::warning('Login failed: account inactive', ['login' => $request->login]);
             return back()
@@ -51,7 +52,6 @@ class AuthController extends Controller
                 ->withInput();
         }
 
-        // Account locked
         if ($user->locked_until && Carbon::now()->lessThan($user->locked_until)) {
             $minutesLeft = Carbon::now()->diffInMinutes($user->locked_until) + 1;
             Log::warning('Login failed: account locked', ['login' => $request->login]);
@@ -60,15 +60,12 @@ class AuthController extends Controller
                 ->withInput();
         }
 
-        // Attempt login
         if (Auth::attempt([$loginField => $request->login, 'password' => $request->password])) {
 
-            // Reset failed attempts on success
             $user->failed_attempts = 0;
             $user->locked_until    = null;
             $user->save();
 
-            // Log to audit_log
             AuditLog::create([
                 'user_id'    => $user->user_id,
                 'action'     => 'LOGIN',
@@ -80,24 +77,16 @@ class AuthController extends Controller
             $request->session()->regenerate();
 
             Log::info('Login successful', [
-                'login' => $request->login,
-                'role'  => $user->role->role_name,
+                'user_id' => $user->user_id,
+                'login'   => $request->login,
+                'role'    => $user->role?->role_name,
             ]);
 
-            // Role-based redirect
-            $roleName = $user->role->role_name;
-
-            if (in_array($roleName, ['directress', 'admin', 'teacher', 'staff'])) {
-                return redirect()->route('admin.dashboard');
-            }
-
-            return redirect()->route('portal.dashboard');
+            return $this->redirectToDashboard();
         }
 
-        // Wrong password — increment failed attempts
-        $user->failed_attempts += 1;
+        $user->failed_attempts = ($user->failed_attempts ?? 0) + 1;
 
-        // Lock after 5 failed attempts for 15 minutes
         if ($user->failed_attempts >= 5) {
             $user->locked_until    = Carbon::now()->addMinutes(15);
             $user->failed_attempts = 0;
@@ -130,7 +119,10 @@ class AuthController extends Controller
                 'changes'    => null,
             ]);
 
-            Log::info('User logged out', ['user_id' => $user->user_id]);
+            Log::info('User logged out', [
+                'user_id'  => $user->user_id,
+                'username' => $user->username,
+            ]);
         }
 
         Auth::logout();
@@ -138,5 +130,16 @@ class AuthController extends Controller
         $request->session()->regenerateToken();
 
         return redirect()->route('login');
+    }
+
+    private function redirectToDashboard()
+    {
+        $role = Auth::user()->role?->role_name;
+
+        if ($role === 'guardian') {
+            return redirect()->route('portal.dashboard');
+        }
+
+        return redirect()->route('admin.dashboard');
     }
 }
