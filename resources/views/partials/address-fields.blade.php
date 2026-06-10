@@ -1,150 +1,181 @@
 @php
-    $r   = $fieldPrefix ?? '';
-    $val = fn($key) => old($r ? "{$r}_{$key}" : $key, $data[$key] ?? '');
-    $nm  = fn($key) => $r ? "{$r}_{$key}" : $key;
-    $uid = $r ?: 'main';
-@endphp
+    use App\Helpers\PhilippinesGeo;
 
-{{-- Province + city data stored in divs (not script tags) so VSCode won't lint them as JS --}}
-<div id="provData-{{ $uid }}" class="d-none" aria-hidden="true">{!! json_encode($provinces ?? []) !!}</div>
-<div id="cityData-{{ $uid }}" class="d-none" aria-hidden="true">{!! json_encode($cities ?? []) !!}</div>
-<div id="initData-{{ $uid }}"
-     class="d-none" aria-hidden="true"
-     data-region="{{ $val('region') }}"
-     data-province="{{ $val('province') }}"
-     data-city="{{ $val('city') }}">
-</div>
+    $fieldPrefix = $fieldPrefix ?? '';
+    $data        = $data        ?? [];
 
-<div class="row g-3">
-    <div class="col-md-6">
-        <label class="form-label fw-semibold">Region</label>
-        <select name="{{ $nm('region') }}"
-                id="regionSelect_{{ $uid }}"
-                class="form-select @error($nm('region')) is-invalid @enderror">
-            <option value="">-- Select Region --</option>
-            @foreach($regions as $code => $name)
-                <option value="{{ $name }}"
-                        data-code="{{ $code }}"
-                        {{ $val('region') == $name ? 'selected' : '' }}>
-                    {{ $name }}
-                </option>
-            @endforeach
-        </select>
-        @error($nm('region'))<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-md-6">
-        <label class="form-label fw-semibold">Province</label>
-        <select name="{{ $nm('province') }}"
-                id="provinceSelect_{{ $uid }}"
-                class="form-select @error($nm('province')) is-invalid @enderror">
-            <option value="">-- Select Province --</option>
-        </select>
-        @error($nm('province'))<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-md-6">
-        <label class="form-label fw-semibold">City / Municipality</label>
-        <select name="{{ $nm('city') }}"
-                id="citySelect_{{ $uid }}"
-                class="form-select @error($nm('city')) is-invalid @enderror">
-            <option value="">-- Select City --</option>
-        </select>
-        @error($nm('city'))<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-md-6">
-        <label class="form-label fw-semibold">Barangay</label>
-        <input type="text" name="{{ $nm('barangay') }}"
-               class="form-control @error($nm('barangay')) is-invalid @enderror"
-               value="{{ $val('barangay') }}"
-               placeholder="e.g. Brgy. Signal Village">
-        @error($nm('barangay'))<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-md-6">
-        <label class="form-label fw-semibold">House / Unit No.</label>
-        <input type="text" name="{{ $nm('house_unit_no') }}"
-               class="form-control @error($nm('house_unit_no')) is-invalid @enderror"
-               value="{{ $val('house_unit_no') }}"
-               placeholder="e.g. Unit 4B, 123">
-        @error($nm('house_unit_no'))<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-md-4">
-        <label class="form-label fw-semibold">Street</label>
-        <input type="text" name="{{ $nm('street') }}"
-               class="form-control @error($nm('street')) is-invalid @enderror"
-               value="{{ $val('street') }}"
-               placeholder="e.g. Rongo St.">
-        @error($nm('street'))<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-    <div class="col-md-2">
-        <label class="form-label fw-semibold">ZIP Code</label>
-        <input type="text" name="{{ $nm('zip_code') }}"
-               class="form-control @error($nm('zip_code')) is-invalid @enderror"
-               value="{{ $val('zip_code') }}"
-               placeholder="e.g. 1630"
-               maxlength="10">
-        @error($nm('zip_code'))<div class="invalid-feedback">{{ $message }}</div>@enderror
-    </div>
-</div>
+    $selRegion    = $data['region']        ?? '';
+    $selProvince  = $data['province']      ?? '';
+    $selCity      = $data['city']          ?? '';
+    $selBarangay  = $data['barangay']      ?? '';
+    $selHouseUnit = $data['house_unit_no'] ?? '';
+    $selStreet    = $data['street']        ?? '';
+    $selZip       = $data['zip_code']      ?? '';
 
-{{-- Pure JavaScript below — zero Blade directives, VSCode-safe --}}
-<script>
-(function () {
-    var rSel = document.querySelector('select[id^="regionSelect_"]');
-    if (!rSel) return;
-    var uid = rSel.id.replace('regionSelect_', '');
+    $geo        = new PhilippinesGeo();
+    $allRegions = $geo->getRegions();
 
-    var provEl = document.getElementById('provData-' + uid);
-    var cityEl = document.getElementById('cityData-' + uid);
-    var initEl = document.getElementById('initData-' + uid);
-    if (!provEl || !cityEl || !initEl) return;
+    $initProvinces = $selRegion   ? $geo->getProvinces($selRegion)   : [];
+    $initCities    = $selProvince ? $geo->getCities($selProvince)    : [];
 
-    var pData      = JSON.parse(provEl.textContent);
-    var cData      = JSON.parse(cityEl.textContent);
-    var initRegion = initEl.dataset.region   || '';
-    var initProv   = initEl.dataset.province || '';
-    var initCity   = initEl.dataset.city     || '';
-
-    var pSel = document.getElementById('provinceSelect_' + uid);
-    var cSel = document.getElementById('citySelect_'     + uid);
-    if (!pSel || !cSel) return;
-
-    function getCode(regionName) {
-        var opt = Array.from(rSel.options).find(function(o) { return o.value === regionName; });
-        return opt ? opt.dataset.code : null;
-    }
-
-    function fillProvinces(regionName, preselect) {
-        var code = getCode(regionName);
-        var list = code ? (pData[code] || []) : [];
-        pSel.innerHTML = '<option value="">-- Select Province --</option>';
-        list.forEach(function(p) {
-            var o = new Option(p, p, false, p === preselect);
-            pSel.appendChild(o);
-        });
-        if (preselect && list.includes(preselect)) {
-            fillCities(preselect, initCity);
+    // Build full structure for JS cascade
+    $geoJson = [];
+    foreach ($allRegions as $rgn) {
+        $provs = $geo->getProvinces($rgn);
+        $geoJson[$rgn] = [];
+        foreach ($provs as $prov) {
+            $geoJson[$rgn][$prov] = $geo->getCities($prov);
         }
     }
 
-    function fillCities(province, preselect) {
-        var list = cData[province] || [];
-        cSel.innerHTML = '<option value="">-- Select City --</option>';
-        list.forEach(function(c) {
-            var o = new Option(c, c, false, c === preselect);
-            cSel.appendChild(o);
+    $uid = 'addr_' . uniqid();
+@endphp
+
+<div id="{{ $uid }}_geo"
+     data-value="{{ json_encode($geoJson, JSON_HEX_TAG | JSON_HEX_AMP | JSON_HEX_QUOT) }}"
+     style="display:none;"></div>
+
+<div class="row g-3">
+    <div class="col-md-6">
+        <label class="form-label fw-semibold">
+            Region <span class="text-danger">*</span>
+        </label>
+        <select name="{{ $fieldPrefix }}region"
+                id="{{ $uid }}_region"
+                class="form-select"
+                required>
+            <option value="">-- Select Region --</option>
+            @foreach($allRegions as $rgn)
+                <option value="{{ $rgn }}"
+                        {{ $selRegion === $rgn ? 'selected' : '' }}>
+                    {{ $rgn }}
+                </option>
+            @endforeach
+        </select>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label fw-semibold">
+            Province <span class="text-danger">*</span>
+        </label>
+        <select name="{{ $fieldPrefix }}province"
+                id="{{ $uid }}_province"
+                class="form-select"
+                required>
+            <option value="">-- Select Province --</option>
+            @foreach($initProvinces as $prov)
+                <option value="{{ $prov }}"
+                        {{ $selProvince === $prov ? 'selected' : '' }}>
+                    {{ $prov }}
+                </option>
+            @endforeach
+        </select>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label fw-semibold">
+            City / Municipality <span class="text-danger">*</span>
+        </label>
+        <select name="{{ $fieldPrefix }}city"
+                id="{{ $uid }}_city"
+                class="form-select"
+                required>
+            <option value="">-- Select City / Municipality --</option>
+            @foreach($initCities as $cty)
+                <option value="{{ $cty }}"
+                        {{ $selCity === $cty ? 'selected' : '' }}>
+                    {{ $cty }}
+                </option>
+            @endforeach
+        </select>
+    </div>
+
+    <div class="col-md-6">
+        <label class="form-label fw-semibold">
+            Barangay <span class="text-danger">*</span>
+        </label>
+        <input type="text"
+               name="{{ $fieldPrefix }}barangay"
+               class="form-control"
+               value="{{ $selBarangay }}"
+               placeholder="e.g. Central Signal Village"
+               required>
+    </div>
+
+    <div class="col-md-4">
+        <label class="form-label fw-semibold">
+            House / Unit No. <span class="text-danger">*</span>
+        </label>
+        <input type="text"
+               name="{{ $fieldPrefix }}house_unit_no"
+               class="form-control"
+               value="{{ $selHouseUnit }}"
+               placeholder="e.g. 8"
+               required>
+    </div>
+
+    <div class="col-md-5">
+        <label class="form-label fw-semibold">
+            Street <span class="text-danger">*</span>
+        </label>
+        <input type="text"
+               name="{{ $fieldPrefix }}street"
+               class="form-control"
+               value="{{ $selStreet }}"
+               placeholder="e.g. Rongo St."
+               required>
+    </div>
+
+    <div class="col-md-3">
+        <label class="form-label fw-semibold">
+            ZIP Code <span class="text-danger">*</span>
+        </label>
+        <input type="text"
+               name="{{ $fieldPrefix }}zip_code"
+               class="form-control"
+               value="{{ $selZip }}"
+               placeholder="e.g. 1630"
+               required>
+    </div>
+</div>
+
+<script>
+(function () {
+    var geoEl    = document.getElementById('{{ $uid }}_geo');
+    var regionEl = document.getElementById('{{ $uid }}_region');
+    var provEl   = document.getElementById('{{ $uid }}_province');
+    var cityEl   = document.getElementById('{{ $uid }}_city');
+    var geoData  = JSON.parse(geoEl.getAttribute('data-value'));
+
+    function fillSelect(el, items, selected) {
+        var placeholder = el.options[0].text;
+        el.innerHTML = '';
+        var blank      = document.createElement('option');
+        blank.value    = '';
+        blank.text     = placeholder;
+        el.appendChild(blank);
+        items.forEach(function (item) {
+            var opt      = document.createElement('option');
+            opt.value    = item;
+            opt.text     = item;
+            opt.selected = (item === selected);
+            el.appendChild(opt);
         });
     }
 
-    rSel.addEventListener('change', function() {
-        fillProvinces(this.value, null);
-        cSel.innerHTML = '<option value="">-- Select City --</option>';
+    regionEl.addEventListener('change', function () {
+        var region   = this.value;
+        var provinces = (region && geoData[region]) ? Object.keys(geoData[region]) : [];
+        fillSelect(provEl, provinces, '');
+        fillSelect(cityEl, [], '');
     });
 
-    pSel.addEventListener('change', function() {
-        fillCities(this.value, null);
+    provEl.addEventListener('change', function () {
+        var region   = regionEl.value;
+        var province = this.value;
+        var cities   = (region && province && geoData[region] && geoData[region][province])
+            ? geoData[region][province] : [];
+        fillSelect(cityEl, cities, '');
     });
-
-    if (initRegion) {
-        fillProvinces(initRegion, initProv);
-    }
-})();
+}());
 </script>

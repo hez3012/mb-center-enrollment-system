@@ -4,7 +4,7 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0">Enrollment Management</h5>
-    @if(Auth::user()->hasPermission('create_enrollment'))
+    @if(Auth::user()->hasPermission('create_walkin_enrollment'))
         <a href="{{ route('admin.enrollments.create') }}" class="btn btn-primary btn-sm">
             <i class="bi bi-plus-circle me-1"></i>Add Walk-in Enrollment
         </a>
@@ -63,8 +63,8 @@
                     <option value="default">Default (by Status)</option>
                     <option value="newest">Newest First</option>
                     <option value="oldest">Oldest First</option>
-                    <option value="az">A–Z Name</option>
-                    <option value="za">Z–A Name</option>
+                    <option value="az">A-Z Name</option>
+                    <option value="za">Z-A Name</option>
                 </select>
             </div>
             <div class="col-md-1">

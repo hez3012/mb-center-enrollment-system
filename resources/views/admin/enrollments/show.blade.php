@@ -4,22 +4,25 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0">Enrollment Details</h5>
-    <div class="d-flex gap-2">
-        <a href="{{ route('admin.enrollments.index') }}" class="btn btn-sm btn-outline-secondary">
-            <i class="bi bi-arrow-left me-1"></i>Back
-        </a>
-    </div>
+    <a href="{{ route('admin.enrollments.index') }}" class="btn btn-sm btn-outline-secondary">
+        <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
 </div>
 
 @if(session('success'))
-<div class="alert alert-success">{{ session('success') }}</div>
+    <div class="alert alert-success alert-dismissible fade show">
+        <i class="bi bi-check-circle me-2"></i>{{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
 @endif
 @if(session('error'))
-<div class="alert alert-danger">{{ session('error') }}</div>
+    <div class="alert alert-danger alert-dismissible fade show">
+        <i class="bi bi-exclamation-circle me-2"></i>{{ session('error') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
 @endif
 
-{{-- Approve / Reject alert for pending online enrollments --}}
-@if($enrollment->status === 'pending' && $enrollment->enrollment_type === 'online' && Auth::user()->hasPermission('edit_enrollment'))
+@if($enrollment->status === 'pending' && $enrollment->enrollment_type === 'online' && Auth::user()->hasPermission('approve_enrollment'))
 <div class="alert alert-warning d-flex justify-content-between align-items-center">
     <span>
         <i class="bi bi-hourglass-split me-2"></i>
@@ -27,9 +30,10 @@
     </span>
     <div class="d-flex gap-2">
         <form method="POST"
-              action="{{ route('admin.enrollments.approve', $enrollment->enrollment_id) }}"
+              action="{{ route('admin.enrollments.approve',$enrollment->enrollment_id) }}"
               class="d-inline">
-            @csrf @method('PATCH')
+            @csrf
+            @method('PATCH')
             <button class="btn btn-sm btn-success">
                 <i class="bi bi-check-circle me-1"></i>Approve
             </button>
@@ -52,15 +56,15 @@
                 <table class="table table-sm mb-0">
                     <tr>
                         <td class="text-muted" style="width:40%">Student</td>
-                        <td>{{ $enrollment->student?->list_name ?? '—' }}</td>
+                        <td>{{ optional($enrollment->student)->list_name ?? '—' }}</td>
                     </tr>
                     <tr>
                         <td class="text-muted">School Year</td>
-                        <td>{{ $enrollment->schoolYear?->year_label ?? '—' }}</td>
+                        <td>{{ optional($enrollment->schoolYear)->year_label ?? '—' }}</td>
                     </tr>
                     <tr>
                         <td class="text-muted">Program Level</td>
-                        <td>{{ $enrollment->programLevel?->program_name ?? '—' }}</td>
+                        <td>{{ optional($enrollment->programLevel)->program_name ?? '—' }}</td>
                     </tr>
                     <tr>
                         <td class="text-muted">Enrollment Type</td>
@@ -106,7 +110,7 @@
                     @endif
                     <tr>
                         <td class="text-muted">Processed By</td>
-                        <td>{{ $enrollment->processedBy?->full_name ?? 'System' }}</td>
+                        <td>{{ optional($enrollment->processedBy)->full_name ?? 'System' }}</td>
                     </tr>
                     <tr>
                         <td class="text-muted">Date Created</td>
@@ -124,30 +128,33 @@
             </div>
             <div class="card-body">
                 @if($enrollment->student)
-                <table class="table table-sm mb-0">
-                    <tr>
-                        <td class="text-muted" style="width:40%">Full Name</td>
-                        <td>{{ $enrollment->student->full_name }}</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted">Age</td>
-                        <td>{{ $enrollment->student->age }} years old</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted">Guardian</td>
-                        <td>{{ $enrollment->student->guardian?->full_name ?? '—' }}</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted">Disabilities</td>
-                        <td>
-                            @forelse($enrollment->student->disabilities as $d)
-                                <span class="badge bg-info text-dark">{{ $d->disability_name }}</span>
-                            @empty
-                                <span class="text-muted">—</span>
-                            @endforelse
-                        </td>
-                    </tr>
-                </table>
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        @include('partials.avatar',[
+                            'name'  => $enrollment->student->list_name,
+                            'image' => $enrollment->student->profile_picture,
+                            'size'  => 56,
+                        ])
+                        <div>
+                            <div class="fw-semibold">{{ $enrollment->student->full_name }}</div>
+                            <small class="text-muted">{{ $enrollment->student->age }} years old</small>
+                        </div>
+                    </div>
+                    <table class="table table-sm mb-0">
+                        <tr>
+                            <td class="text-muted" style="width:40%">Guardian</td>
+                            <td>{{ optional($enrollment->student->guardian)->full_name ?? '—' }}</td>
+                        </tr>
+                        <tr>
+                            <td class="text-muted">Disabilities</td>
+                            <td>
+                                @forelse($enrollment->student->disabilities as $d)
+                                    <span class="badge bg-info text-dark">{{ $d->disability_name }}</span>
+                                @empty
+                                    <span class="text-muted">—</span>
+                                @endforelse
+                            </td>
+                        </tr>
+                    </table>
                 @endif
             </div>
         </div>
@@ -158,40 +165,39 @@
             </div>
             <div class="card-body p-0">
                 @forelse($enrollment->documents as $doc)
-                <div class="px-3 py-2 border-bottom">
-                    <div class="d-flex justify-content-between align-items-center">
-                        <div>
-                            <div class="fw-semibold small">{{ $doc->documentType?->document_name }}</div>
-                            @if($doc->notes)
-                                <div class="text-muted small">{{ $doc->notes }}</div>
-                            @endif
-                        </div>
-                        <div class="d-flex align-items-center gap-2">
-                            @if($doc->file_path)
-                                <a href="{{ Storage::url($doc->file_path) }}"
-                                   target="_blank"
-                                   class="btn btn-sm btn-outline-secondary">
-                                    <i class="bi bi-file-earmark"></i>
-                                </a>
-                            @endif
-                            @php
-                                $docColors = ['submitted'=>'success','pending'=>'warning','missing'=>'danger'];
-                            @endphp
-                            <span class="badge bg-{{ $docColors[$doc->submission_status] ?? 'secondary' }}">
-                                {{ ucfirst($doc->submission_status) }}
-                            </span>
+                    <div class="px-3 py-2 border-bottom">
+                        <div class="d-flex justify-content-between align-items-center">
+                            <div>
+                                <div class="fw-semibold small">
+                                    {{ optional($doc->documentType)->document_name }}
+                                </div>
+                                @if($doc->notes)
+                                    <div class="text-muted small">{{ $doc->notes }}</div>
+                                @endif
+                            </div>
+                            <div class="d-flex align-items-center gap-2">
+                                @if($doc->file_path)
+                                    <a href="{{ Storage::url($doc->file_path) }}"
+                                       target="_blank"
+                                       class="btn btn-sm btn-outline-secondary">
+                                        <i class="bi bi-file-earmark"></i>
+                                    </a>
+                                @endif
+                                @php $dc=['submitted'=>'success','pending'=>'warning','missing'=>'danger']; @endphp
+                                <span class="badge bg-{{ $dc[$doc->submission_status] ?? 'secondary' }}">
+                                    {{ ucfirst($doc->submission_status) }}
+                                </span>
+                            </div>
                         </div>
                     </div>
-                </div>
                 @empty
-                <p class="text-muted small px-3 py-2 mb-0">No documents on record.</p>
+                    <p class="text-muted small px-3 py-2 mb-0">No documents on record.</p>
                 @endforelse
             </div>
         </div>
     </div>
 </div>
 
-{{-- Reject Modal --}}
 @if($enrollment->status === 'pending')
 <div class="modal fade" id="rejectModal" tabindex="-1">
     <div class="modal-dialog">
@@ -203,15 +209,18 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <form method="POST"
-                  action="{{ route('admin.enrollments.reject', $enrollment->enrollment_id) }}">
-                @csrf @method('PATCH')
+                  action="{{ route('admin.enrollments.reject',$enrollment->enrollment_id) }}">
+                @csrf
+                @method('PATCH')
                 <div class="modal-body">
                     <label class="form-label fw-semibold">Reason for Rejection</label>
                     <textarea name="rejection_reason" rows="3"
                               class="form-control @error('rejection_reason') is-invalid @enderror"
                               placeholder="Explain why this enrollment is being rejected..."
                               required>{{ old('rejection_reason') }}</textarea>
-                    @error('rejection_reason')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    @error('rejection_reason')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
                 </div>
                 <div class="modal-footer border-0 pt-0">
                     <button type="button" class="btn btn-sm btn-secondary"

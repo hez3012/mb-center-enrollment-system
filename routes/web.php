@@ -75,24 +75,42 @@ Route::middleware(['auth'])->group(function () {
             ->middleware('permission:delete_student')->name('admin.students.destroy');
 
         // ── Enrollment Management ──────────────────────────────
+        // Enrollment Management
         Route::get('/enrollments', [EnrollmentController::class, 'index'])
-            ->middleware('permission:view_enrollment')->name('admin.enrollments.index');
+            ->middleware('permission:view_enrollment')
+            ->name('admin.enrollments.index');
+
         Route::get('/enrollments/create', [EnrollmentController::class, 'create'])
-            ->middleware('permission:create_enrollment')->name('admin.enrollments.create');
+            ->middleware('permission:create_walkin_enrollment')
+            ->name('admin.enrollments.create');
+
         Route::post('/enrollments', [EnrollmentController::class, 'store'])
-            ->middleware('permission:create_enrollment')->name('admin.enrollments.store');
+            ->middleware('permission:create_walkin_enrollment')
+            ->name('admin.enrollments.store');
+
         Route::get('/enrollments/{id}', [EnrollmentController::class, 'show'])
-            ->middleware('permission:view_enrollment')->name('admin.enrollments.show');
+            ->middleware('permission:view_enrollment')
+            ->name('admin.enrollments.show');
+
         Route::get('/enrollments/{id}/edit', [EnrollmentController::class, 'edit'])
-            ->middleware('permission:edit_enrollment')->name('admin.enrollments.edit');
+            ->middleware('permission:edit_enrollment')
+            ->name('admin.enrollments.edit');
+
         Route::put('/enrollments/{id}', [EnrollmentController::class, 'update'])
-            ->middleware('permission:edit_enrollment')->name('admin.enrollments.update');
+            ->middleware('permission:edit_enrollment')
+            ->name('admin.enrollments.update');
+
         Route::patch('/enrollments/{id}/approve', [EnrollmentController::class, 'approve'])
-            ->middleware('permission:edit_enrollment')->name('admin.enrollments.approve');
+            ->middleware('permission:approve_enrollment')
+            ->name('admin.enrollments.approve');
+
         Route::patch('/enrollments/{id}/reject', [EnrollmentController::class, 'reject'])
-            ->middleware('permission:edit_enrollment')->name('admin.enrollments.reject');
+            ->middleware('permission:approve_enrollment')
+            ->name('admin.enrollments.reject');
+
         Route::delete('/enrollments/{id}', [EnrollmentController::class, 'destroy'])
-            ->middleware('permission:delete_enrollment')->name('admin.enrollments.destroy');
+            ->middleware('permission:delete_enrollment')
+            ->name('admin.enrollments.destroy');
     });
 
     // ── Guardian Portal routes ─────────────────────────────────

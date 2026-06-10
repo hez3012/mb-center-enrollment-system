@@ -4,7 +4,6 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0">Add New User</h5>
-    {{-- Back button goes to Guardian Management if coming from there --}}
     @if($preselectedRole === 'guardian')
         <a href="{{ route('admin.guardians.index') }}" class="btn btn-sm btn-outline-secondary">
             <i class="bi bi-arrow-left me-1"></i>Back
@@ -18,12 +17,15 @@
 
 <div class="card border-0 shadow-sm">
     <div class="card-body">
-        <form method="POST" action="{{ route('admin.users.store') }}">
+        <form method="POST" action="{{ route('admin.users.store') }}"
+              enctype="multipart/form-data">
             @csrf
 
-            {{-- Role selector first --}}
+            {{-- Role --}}
             <div class="mb-4">
-                <label class="form-label fw-semibold">Role</label>
+                <label class="form-label fw-semibold">
+                    Role <span class="text-danger">*</span>
+                </label>
                 <select name="role_id" id="roleSelect"
                         class="form-select @error('role_id') is-invalid @enderror" required>
                     <option value="">-- Select Role --</option>
@@ -38,13 +40,31 @@
                 @error('role_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
             </div>
 
+            {{-- Profile Picture --}}
+            <p class="fw-semibold text-primary small mb-2">
+                <i class="bi bi-person-circle me-1"></i>Profile Picture
+            </p>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <input type="file" name="profile_picture"
+                           class="form-control @error('profile_picture') is-invalid @enderror"
+                           accept=".jpg,.jpeg,.png">
+                    @error('profile_picture')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                    <small class="text-muted">JPG or PNG only · Max 2MB · Optional</small>
+                </div>
+            </div>
+
             {{-- Personal Information --}}
             <p class="fw-semibold text-primary small mb-2">
                 <i class="bi bi-person me-1"></i>Personal Information
             </p>
             <div class="row g-3 mb-4">
                 <div class="col-md-4">
-                    <label class="form-label fw-semibold">First Name</label>
+                    <label class="form-label fw-semibold">
+                        First Name <span class="text-danger">*</span>
+                    </label>
                     <input type="text" name="first_name"
                            class="form-control @error('first_name') is-invalid @enderror"
                            value="{{ old('first_name') }}" required>
@@ -60,7 +80,9 @@
                     @error('middle_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-semibold">Last Name</label>
+                    <label class="form-label fw-semibold">
+                        Last Name <span class="text-danger">*</span>
+                    </label>
                     <input type="text" name="last_name"
                            class="form-control @error('last_name') is-invalid @enderror"
                            value="{{ old('last_name') }}" required>
@@ -74,7 +96,7 @@
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">
-                        Birthdate <span class="text-muted small fw-normal">(mm/dd/yyyy)</span>
+                        Birthdate <span class="text-muted small fw-normal">(optional)</span>
                     </label>
                     <input type="date" name="birthdate" id="birthdateInput"
                            class="form-control @error('birthdate') is-invalid @enderror"
@@ -87,10 +109,12 @@
                            readonly placeholder="Auto">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-semibold" id="contact1Label">Contact #1</label>
+                    <label class="form-label fw-semibold">
+                        Contact #1 <span class="text-danger">*</span>
+                    </label>
                     <input type="text" name="contact_number_1" id="contact1Input"
                            class="form-control @error('contact_number_1') is-invalid @enderror"
-                           value="{{ old('contact_number_1') }}">
+                           value="{{ old('contact_number_1') }}" required>
                     @error('contact_number_1')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-4">
@@ -132,40 +156,51 @@
             </p>
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">Email</label>
+                    <label class="form-label fw-semibold">
+                        Email <span class="text-danger">*</span>
+                    </label>
                     <input type="email" name="email"
                            class="form-control @error('email') is-invalid @enderror"
                            value="{{ old('email') }}" required>
                     @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">Username</label>
+                    <label class="form-label fw-semibold">
+                        Username <span class="text-danger">*</span>
+                    </label>
                     <input type="text" name="username"
                            class="form-control @error('username') is-invalid @enderror"
                            value="{{ old('username') }}" required>
                     @error('username')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">Password</label>
+                    <label class="form-label fw-semibold">
+                        Password <span class="text-danger">*</span>
+                    </label>
                     <input type="password" name="password"
                            class="form-control @error('password') is-invalid @enderror" required>
                     @error('password')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">Confirm Password</label>
+                    <label class="form-label fw-semibold">
+                        Confirm Password <span class="text-danger">*</span>
+                    </label>
                     <input type="password" name="password_confirmation"
                            class="form-control" required>
                 </div>
             </div>
 
-            {{-- Guardian-only: Relationship to Student only (no Home Address) --}}
-            <div id="guardianFields" class="border rounded p-3 mb-4 bg-light d-none">
+            {{-- Guardian-only --}}
+            <div id="guardianFields"
+                 class="border rounded p-3 mb-4 bg-light d-none">
                 <p class="fw-semibold text-primary small mb-3">
                     <i class="bi bi-person-heart me-1"></i>Guardian Profile Information
                 </p>
                 <div class="row g-3">
                     <div class="col-md-6">
-                        <label class="form-label fw-semibold">Relationship to Student</label>
+                        <label class="form-label fw-semibold">
+                            Relationship to Student <span class="text-danger">*</span>
+                        </label>
                         <select name="relationship"
                                 class="form-select @error('relationship') is-invalid @enderror">
                             <option value="">-- Select --</option>
@@ -224,30 +259,30 @@
     </div>
 </div>
 
-<div id="rolePermissionsData" data-value='@json($rolePermissions)' style="display:none;"></div>
+<div id="rolePermissionsData"
+     data-value='@json($rolePermissions)'
+     style="display:none;"></div>
 
 <script>
-const rolePermissions    = JSON.parse(document.getElementById('rolePermissionsData').getAttribute('data-value'));
-const roleSelect         = document.getElementById('roleSelect');
-const guardianFields     = document.getElementById('guardianFields');
-const permissionsSection = document.getElementById('permissionsSection');
-const contact1Input      = document.getElementById('contact1Input');
+var rolePermissions    = JSON.parse(document.getElementById('rolePermissionsData').getAttribute('data-value'));
+var roleSelect         = document.getElementById('roleSelect');
+var guardianFields     = document.getElementById('guardianFields');
+var permissionsSection = document.getElementById('permissionsSection');
+var contact1Input      = document.getElementById('contact1Input');
 
 function handleRoleChange() {
-    const opt      = roleSelect.options[roleSelect.selectedIndex];
-    const roleName = opt ? opt.getAttribute('data-role') : '';
-    const roleId   = parseInt(roleSelect.value);
+    var opt      = roleSelect.options[roleSelect.selectedIndex];
+    var roleName = opt ? opt.getAttribute('data-role') : '';
+    var roleId   = parseInt(roleSelect.value);
 
     if (roleName === 'guardian') {
         guardianFields.classList.remove('d-none');
         permissionsSection.classList.add('d-none');
-        contact1Input.required = true;
     } else {
         guardianFields.classList.add('d-none');
         permissionsSection.classList.remove('d-none');
-        contact1Input.required = false;
-        const defaultPerms = rolePermissions[roleId] || [];
-        document.querySelectorAll('.permission-check').forEach(cb => {
+        var defaultPerms = rolePermissions[roleId] || [];
+        document.querySelectorAll('.permission-check').forEach(function(cb) {
             cb.checked = defaultPerms.includes(parseInt(cb.value));
         });
     }
@@ -256,18 +291,18 @@ function handleRoleChange() {
 roleSelect.addEventListener('change', handleRoleChange);
 handleRoleChange();
 
-document.getElementById('middleNameInput').addEventListener('input', function () {
-    const mi = this.value.trim();
+document.getElementById('middleNameInput').addEventListener('input', function() {
+    var mi = this.value.trim();
     document.getElementById('miDisplay').value = mi ? mi[0].toUpperCase() + '.' : '';
 });
 
-document.getElementById('birthdateInput').addEventListener('change', function () {
+document.getElementById('birthdateInput').addEventListener('change', function() {
     if (!this.value) { document.getElementById('ageDisplay').value = ''; return; }
-    const birth = new Date(this.value);
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
+    var birth = new Date(this.value);
+    var today = new Date();
+    var age = today.getFullYear() - birth.getFullYear();
     if (today.getMonth() < birth.getMonth() ||
-       (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
+       (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) { age--; }
     document.getElementById('ageDisplay').value = age + ' years old';
 });
 </script>

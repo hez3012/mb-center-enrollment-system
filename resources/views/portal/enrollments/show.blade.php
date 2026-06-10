@@ -13,7 +13,6 @@
 <div class="alert alert-warning">
     <i class="bi bi-hourglass-split me-2"></i>
     Your enrollment is <strong>pending review</strong> by the administrator.
-    You will be notified once it has been processed.
 </div>
 @elseif($enrollment->status === 'pending_payment')
 <div class="alert alert-info">
@@ -47,18 +46,27 @@
                 <i class="bi bi-clipboard-check me-1"></i>Enrollment Summary
             </div>
             <div class="card-body">
+                @if($enrollment->student)
+                    <div class="d-flex align-items-center gap-3 mb-3">
+                        @include('partials.avatar',[
+                            'name'  => $enrollment->student->full_name,
+                            'image' => $enrollment->student->profile_picture,
+                            'size'  => 56,
+                        ])
+                        <div>
+                            <div class="fw-semibold">{{ $enrollment->student->full_name }}</div>
+                            <small class="text-muted">{{ $enrollment->student->age }} years old</small>
+                        </div>
+                    </div>
+                @endif
                 <table class="table table-sm mb-0">
                     <tr>
-                        <td class="text-muted" style="width:40%">Student</td>
-                        <td>{{ $enrollment->student?->full_name }}</td>
-                    </tr>
-                    <tr>
-                        <td class="text-muted">School Year</td>
-                        <td>{{ $enrollment->schoolYear?->year_label }}</td>
+                        <td class="text-muted" style="width:40%">School Year</td>
+                        <td>{{ optional($enrollment->schoolYear)->year_label }}</td>
                     </tr>
                     <tr>
                         <td class="text-muted">Program Level</td>
-                        <td>{{ $enrollment->programLevel?->program_name }}</td>
+                        <td>{{ optional($enrollment->programLevel)->program_name }}</td>
                     </tr>
                     <tr>
                         <td class="text-muted">Status</td>
@@ -76,9 +84,13 @@
                         <td class="text-muted">Waiver</td>
                         <td>
                             @if($enrollment->waiver_signed)
-                                <span class="text-success"><i class="bi bi-check-circle me-1"></i>Signed</span>
+                                <span class="text-success">
+                                    <i class="bi bi-check-circle me-1"></i>Signed
+                                </span>
                             @else
-                                <span class="text-danger"><i class="bi bi-x-circle me-1"></i>Not signed</span>
+                                <span class="text-danger">
+                                    <i class="bi bi-x-circle me-1"></i>Not signed
+                                </span>
                             @endif
                         </td>
                     </tr>
@@ -94,31 +106,31 @@
             </div>
             <div class="card-body p-0">
                 @forelse($enrollment->documents as $doc)
-                <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
-                    <div>
-                        <div class="fw-semibold small">{{ $doc->documentType?->document_name }}</div>
-                        @if($doc->notes)
-                            <div class="text-muted small">{{ $doc->notes }}</div>
-                        @endif
+                    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                        <div>
+                            <div class="fw-semibold small">
+                                {{ optional($doc->documentType)->document_name }}
+                            </div>
+                            @if($doc->notes)
+                                <div class="text-muted small">{{ $doc->notes }}</div>
+                            @endif
+                        </div>
+                        <div class="d-flex align-items-center gap-2">
+                            @if($doc->file_path)
+                                <a href="{{ Storage::url($doc->file_path) }}"
+                                   target="_blank"
+                                   class="btn btn-sm btn-outline-secondary">
+                                    <i class="bi bi-file-earmark"></i>
+                                </a>
+                            @endif
+                            @php $dc=['submitted'=>'success','pending'=>'warning','missing'=>'danger']; @endphp
+                            <span class="badge bg-{{ $dc[$doc->submission_status] ?? 'secondary' }}">
+                                {{ ucfirst($doc->submission_status) }}
+                            </span>
+                        </div>
                     </div>
-                    <div class="d-flex align-items-center gap-2">
-                        @if($doc->file_path)
-                            <a href="{{ Storage::url($doc->file_path) }}"
-                               target="_blank"
-                               class="btn btn-sm btn-outline-secondary">
-                                <i class="bi bi-file-earmark"></i>
-                            </a>
-                        @endif
-                        @php
-                            $dc = ['submitted'=>'success','pending'=>'warning','missing'=>'danger'];
-                        @endphp
-                        <span class="badge bg-{{ $dc[$doc->submission_status] ?? 'secondary' }}">
-                            {{ ucfirst($doc->submission_status) }}
-                        </span>
-                    </div>
-                </div>
                 @empty
-                <p class="text-muted small px-3 py-2 mb-0">No documents on record.</p>
+                    <p class="text-muted small px-3 py-2 mb-0">No documents on record.</p>
                 @endforelse
             </div>
         </div>

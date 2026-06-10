@@ -7,7 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Storage;
 use App\Models\User;
 use App\Models\Role;
 use App\Models\Permission;
@@ -17,298 +17,302 @@ use App\Helpers\PhilippinesGeo;
 
 class UserController extends Controller
 {
-    private function geoData(): array
-    {
-        return [
-            'regions'   => PhilippinesGeo::regions(),
-            'provinces' => PhilippinesGeo::provinces(),
-            'cities'    => PhilippinesGeo::cities(),
-        ];
-    }
-
     public function index()
     {
-        $users = User::with('role')->get();
+        $users = User::with('role')->whereNull('deleted_at')->get();
         return view('admin.users.index', compact('users'));
-    }
-
-    public function show($id)
-    {
-        $user = User::with(['role', 'permissions', 'guardian'])->findOrFail($id);
-        return view('admin.users.show', compact('user'));
     }
 
     public function create(Request $request)
     {
-        $roles           = Role::all();
-        $permissions     = Permission::orderBy('category')->orderBy('permission_name')->get();
-        $currentRoleName = Auth::user()->role->role_name;
-        $preselectedRole = $request->query('role');
+        $currentRole     = Auth::user()->role?->role_name;
+        $preselectedRole = $request->query('role', '');
 
-        $allowedRoles = match($currentRoleName) {
-            'directress' => $roles->whereNotIn('role_name', ['directress']),
-            'admin'      => $roles->whereNotIn('role_name', ['directress']),
-            'teacher'    => $roles->whereIn('role_name', ['staff', 'guardian']),
-            default      => $roles->whereIn('role_name', ['staff', 'guardian']),
+        $allowedRoleNames = match($currentRole) {
+            'directress' => ['directress','admin','teacher','staff','guardian'],
+            'admin'      => ['admin','teacher','staff','guardian'],
+            'teacher'    => ['staff','guardian'],
+            default      => ['guardian'],
         };
 
-        $rolePermissions = Role::with('permissions')->get()
-            ->mapWithKeys(fn($role) => [
-                $role->role_id => $role->permissions->pluck('permission_id')->toArray()
-            ]);
+        $allowedRoles  = Role::whereIn('role_name', $allowedRoleNames)->get();
+        $permissions   = Permission::orderBy('category')->orderBy('permission_name')->get();
+
+        $rolePermsRaw  = DB::table('role_permissions')
+            ->join('roles','role_permissions.role_id','=','roles.role_id')
+            ->select('roles.role_id','role_permissions.permission_id')
+            ->get();
+
+        $rolePermissions = [];
+        foreach ($rolePermsRaw as $rp) {
+            $rolePermissions[$rp->role_id][] = $rp->permission_id;
+        }
+
+        $geo       = new PhilippinesGeo();
+        $regions   = $geo->getRegions();
+        $provinces = $geo->getProvinces('');
+        $cities    = $geo->getCities('');
 
         return view('admin.users.create', compact(
-            'allowedRoles', 'permissions', 'rolePermissions', 'preselectedRole'
-        ) + $this->geoData());
+            'allowedRoles','permissions','rolePermissions',
+            'preselectedRole','regions','provinces','cities'
+        ));
     }
 
     public function store(Request $request)
     {
-        $isGuardian = Role::find($request->role_id)?->role_name === 'guardian';
-
-        $rules = [
-            'first_name'       => 'required|string|max:50',
-            'middle_name'      => 'nullable|string|max:50',
-            'last_name'        => 'required|string|max:50',
-            'birthdate'        => 'nullable|date',
-            'contact_number_1' => 'nullable|string|max:20',
-            'contact_number_2' => 'nullable|string|max:20',
-            'region'           => 'nullable|string|max:100',
-            'province'         => 'nullable|string|max:100',
-            'city'             => 'nullable|string|max:100',
-            'house_unit_no'    => 'nullable|string|max:100',
-            'street'           => 'nullable|string|max:100',
-            'barangay'         => 'nullable|string|max:100',
-            'zip_code'         => 'nullable|string|max:10',
-            'email'            => 'required|email|unique:users,email',
-            'username'         => 'required|string|unique:users,username|max:50',
-            'password'         => 'required|string|min:8|confirmed',
+        $request->validate([
             'role_id'          => 'required|exists:roles,role_id',
-            'permissions'      => 'array',
-        ];
+            'first_name'       => 'required|string|max:100',
+            'middle_name'      => 'nullable|string|max:100',
+            'last_name'        => 'required|string|max:100',
+            'birthdate'        => 'nullable|date',
+            'contact_number_1' => 'required|string|max:20',
+            'contact_number_2' => 'nullable|string|max:20',
+            'region'           => 'required|string|max:100',
+            'province'         => 'required|string|max:100',
+            'city'             => 'required|string|max:100',
+            'barangay'         => 'required|string|max:100',
+            'house_unit_no'    => 'required|string|max:100',
+            'street'           => 'required|string|max:100',
+            'zip_code'         => 'required|string|max:10',
+            'email'            => 'required|email|unique:users,email',
+            'username'         => 'required|string|min:4|max:50|unique:users,username',
+            'password'         => 'required|string|min:8|confirmed',
+            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'permissions'      => 'nullable|array',
+        ]);
 
-        if ($isGuardian) {
-            $rules['contact_number_1'] = 'required|string|max:20';
-            $rules['relationship']     = 'required|string|max:50';
+        $role = Role::find($request->role_id);
+
+        if ($role && $role->role_name === 'guardian') {
+            $request->validate(['relationship' => 'required|string']);
         }
 
-        $request->validate($rules);
+        $picturePath = null;
+        if ($request->hasFile('profile_picture')) {
+            $picturePath = $request->file('profile_picture')
+                ->store('profile_pictures/users','public');
+        }
 
-        DB::beginTransaction();
-        try {
-            $user = User::create([
-                'first_name'       => $request->first_name,
-                'middle_name'      => $request->middle_name,
-                'last_name'        => $request->last_name,
-                'birthdate'        => $request->birthdate,
-                'contact_number_1' => $request->contact_number_1,
-                'contact_number_2' => $request->contact_number_2,
-                'region'           => $request->region,
-                'province'         => $request->province,
-                'city'             => $request->city,
-                'house_unit_no'    => $request->house_unit_no,
-                'street'           => $request->street,
-                'barangay'         => $request->barangay,
-                'zip_code'         => $request->zip_code,
-                'email'            => $request->email,
-                'username'         => $request->username,
-                'password'         => Hash::make($request->password),
-                'is_active'        => true,
-                'failed_attempts'  => 0,
-                'role_id'          => $request->role_id,
+        $user = User::create([
+            'first_name'       => $request->first_name,
+            'middle_name'      => $request->middle_name,
+            'last_name'        => $request->last_name,
+            'birthdate'        => $request->birthdate,
+            'contact_number_1' => $request->contact_number_1,
+            'contact_number_2' => $request->contact_number_2,
+            'region'           => $request->region,
+            'province'         => $request->province,
+            'city'             => $request->city,
+            'barangay'         => $request->barangay,
+            'house_unit_no'    => $request->house_unit_no,
+            'street'           => $request->street,
+            'zip_code'         => $request->zip_code,
+            'email'            => $request->email,
+            'username'         => $request->username,
+            'password'         => Hash::make($request->password),
+            'role_id'          => $request->role_id,
+            'profile_picture'  => $picturePath,
+            'is_active'        => 1,
+        ]);
+
+        if ($role && $role->role_name === 'guardian') {
+            Guardian::create([
+                'user_id'      => $user->user_id,
+                'relationship' => $request->relationship,
             ]);
-
-            if ($isGuardian) {
-                $guardianRole = Role::where('role_name', 'guardian')->first();
-                if ($guardianRole) {
-                    $user->permissions()->sync(
-                        $guardianRole->permissions->pluck('permission_id')->toArray()
-                    );
-                }
-                Guardian::create([
-                    'user_id'        => $user->user_id,
-                    'first_name'     => $request->first_name,
-                    'middle_name'    => $request->middle_name,
-                    'last_name'      => $request->last_name,
-                    'contact_number' => $request->contact_number_1,
-                    'relationship'   => $request->relationship,
-                    'address'        => '',
+            $permIds = DB::table('role_permissions')
+                ->where('role_id', $role->role_id)
+                ->pluck('permission_id');
+            foreach ($permIds as $permId) {
+                DB::table('user_permissions')->insertOrIgnore([
+                    'user_id'       => $user->user_id,
+                    'permission_id' => $permId,
                 ]);
-            } else {
-                $user->permissions()->sync($request->permissions ?? []);
             }
+        } else {
+            foreach ($request->input('permissions',[]) as $permId) {
+                DB::table('user_permissions')->insertOrIgnore([
+                    'user_id'       => $user->user_id,
+                    'permission_id' => $permId,
+                ]);
+            }
+        }
 
-            AuditLog::create([
-                'user_id'    => Auth::user()->user_id,
-                'action'     => 'CREATE',
-                'table_name' => 'users',
-                'record_id'  => $user->user_id,
-                'changes'    => json_encode(['created_user' => $user->username]),
-            ]);
+        AuditLog::create([
+            'user_id'    => Auth::user()->user_id,
+            'action'     => 'CREATE',
+            'table_name' => 'users',
+            'record_id'  => $user->user_id,
+            'changes'    => json_encode(['username' => $user->username, 'role' => $role?->role_name]),
+        ]);
 
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('User creation failed', ['error' => $e->getMessage()]);
-            return back()->with('error', 'Failed to create user. Please try again.')->withInput();
+        if ($role && $role->role_name === 'guardian') {
+            return redirect()->route('admin.guardians.index')
+                ->with('success','Guardian account created successfully.');
         }
 
         return redirect()->route('admin.users.index')
-            ->with('success', "User {$user->username} created successfully.");
+            ->with('success','User created successfully.');
     }
 
-    public function edit($id)
+    public function show(string $id)
     {
-        $user            = User::with(['role', 'permissions', 'guardian'])->findOrFail($id);
-        $roles           = Role::all();
-        $permissions     = Permission::orderBy('category')->orderBy('permission_name')->get();
-        $currentRoleName = Auth::user()->role->role_name;
-        $userRoleName    = $user->role?->role_name;
+        $user = User::with(['role','permissions','guardian'])->findOrFail($id);
+        return view('admin.users.show', compact('user'));
+    }
+
+    public function edit(string $id)
+    {
+        $user         = User::with(['role','permissions','guardian'])->findOrFail($id);
+        $currentRole  = Auth::user()->role?->role_name;
+        $userRoleName = $user->role?->role_name;
+
+        $allowedRoleNames = match($currentRole) {
+            'directress' => ['directress','admin','teacher','staff','guardian'],
+            'admin'      => ['admin','teacher','staff','guardian'],
+            'teacher'    => ['staff','guardian'],
+            default      => ['guardian'],
+        };
 
         if ($userRoleName === 'guardian') {
-            $allowedRoles = $roles->whereIn('role_name', ['guardian']);
+            $allowedRoles = Role::where('role_name','guardian')->get();
         } else {
-            $allowedRoles = match($currentRoleName) {
-                'directress' => $roles->whereIn('role_name', ['admin', 'teacher', 'staff']),
-                'admin'      => $roles->whereIn('role_name', ['admin', 'teacher', 'staff']),
-                'teacher'    => $roles->whereIn('role_name', ['staff']),
-                default      => $roles->whereIn('role_name', ['staff']),
-            };
+            $allowedRoles = Role::whereIn('role_name', $allowedRoleNames)
+                ->where('role_name','!=','guardian')->get();
         }
 
-        $rolePermissions = Role::with('permissions')->get()
-            ->mapWithKeys(fn($role) => [
-                $role->role_id => $role->permissions->pluck('permission_id')->toArray()
-            ]);
+        $permissions  = Permission::orderBy('category')->orderBy('permission_name')->get();
+
+        $rolePermsRaw = DB::table('role_permissions')
+            ->join('roles','role_permissions.role_id','=','roles.role_id')
+            ->select('roles.role_id','role_permissions.permission_id')
+            ->get();
+
+        $rolePermissions = [];
+        foreach ($rolePermsRaw as $rp) {
+            $rolePermissions[$rp->role_id][] = $rp->permission_id;
+        }
+
+        $geo       = new PhilippinesGeo();
+        $regions   = $geo->getRegions();
+        $provinces = $geo->getProvinces($user->region ?? '');
+        $cities    = $geo->getCities($user->province ?? '');
 
         return view('admin.users.edit', compact(
-            'user', 'allowedRoles', 'permissions', 'rolePermissions', 'userRoleName'
-        ) + $this->geoData());
+            'user','userRoleName','allowedRoles','permissions',
+            'rolePermissions','regions','provinces','cities'
+        ));
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, string $id)
     {
-        $user         = User::with(['role', 'guardian'])->findOrFail($id);
-        $userRoleName = $user->role?->role_name;
-        $isGuardian   = $userRoleName === 'guardian';
+        $user = User::findOrFail($id);
 
-        $rules = [
-            'first_name'       => 'required|string|max:50',
-            'middle_name'      => 'nullable|string|max:50',
-            'last_name'        => 'required|string|max:50',
+        $request->validate([
+            'first_name'       => 'required|string|max:100',
+            'middle_name'      => 'nullable|string|max:100',
+            'last_name'        => 'required|string|max:100',
             'birthdate'        => 'nullable|date',
-            'contact_number_1' => 'nullable|string|max:20',
+            'contact_number_1' => 'required|string|max:20',
             'contact_number_2' => 'nullable|string|max:20',
-            'region'           => 'nullable|string|max:100',
-            'province'         => 'nullable|string|max:100',
-            'city'             => 'nullable|string|max:100',
-            'house_unit_no'    => 'nullable|string|max:100',
-            'street'           => 'nullable|string|max:100',
-            'barangay'         => 'nullable|string|max:100',
-            'zip_code'         => 'nullable|string|max:10',
-            'email'            => 'required|email|unique:users,email,' . $id . ',user_id',
-            'username'         => 'required|string|max:50|unique:users,username,' . $id . ',user_id',
+            'region'           => 'required|string|max:100',
+            'province'         => 'required|string|max:100',
+            'city'             => 'required|string|max:100',
+            'barangay'         => 'required|string|max:100',
+            'house_unit_no'    => 'required|string|max:100',
+            'street'           => 'required|string|max:100',
+            'zip_code'         => 'required|string|max:10',
+            'email'            => 'required|email|unique:users,email,'.$user->user_id.',user_id',
+            'username'         => 'required|string|min:4|max:50|unique:users,username,'.$user->user_id.',user_id',
             'password'         => 'nullable|string|min:8|confirmed',
-            'role_id'          => 'required|exists:roles,role_id',
-            'permissions'      => 'array',
+            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'permissions'      => 'nullable|array',
+        ]);
+
+        $role = $user->role;
+        if ($role && $role->role_name === 'guardian') {
+            $request->validate(['relationship' => 'required|string']);
+        }
+
+        $picturePath = $user->profile_picture;
+        if ($request->hasFile('profile_picture')) {
+            if ($picturePath) Storage::disk('public')->delete($picturePath);
+            $picturePath = $request->file('profile_picture')
+                ->store('profile_pictures/users','public');
+        }
+
+        $data = [
+            'first_name'       => $request->first_name,
+            'middle_name'      => $request->middle_name,
+            'last_name'        => $request->last_name,
+            'birthdate'        => $request->birthdate,
+            'contact_number_1' => $request->contact_number_1,
+            'contact_number_2' => $request->contact_number_2,
+            'region'           => $request->region,
+            'province'         => $request->province,
+            'city'             => $request->city,
+            'barangay'         => $request->barangay,
+            'house_unit_no'    => $request->house_unit_no,
+            'street'           => $request->street,
+            'zip_code'         => $request->zip_code,
+            'email'            => $request->email,
+            'username'         => $request->username,
+            'profile_picture'  => $picturePath,
         ];
 
-        if ($isGuardian) {
-            $rules['contact_number_1'] = 'required|string|max:20';
-            $rules['relationship']     = 'required|string|max:50';
+        if ($request->filled('password')) {
+            $data['password'] = Hash::make($request->password);
         }
 
-        $request->validate($rules);
+        $user->update($data);
 
-        DB::beginTransaction();
-        try {
-            $user->fill([
-                'first_name'       => $request->first_name,
-                'middle_name'      => $request->middle_name,
-                'last_name'        => $request->last_name,
-                'birthdate'        => $request->birthdate,
-                'contact_number_1' => $request->contact_number_1,
-                'contact_number_2' => $request->contact_number_2,
-                'region'           => $request->region,
-                'province'         => $request->province,
-                'city'             => $request->city,
-                'house_unit_no'    => $request->house_unit_no,
-                'street'           => $request->street,
-                'barangay'         => $request->barangay,
-                'zip_code'         => $request->zip_code,
-                'email'            => $request->email,
-                'username'         => $request->username,
-                'role_id'          => $isGuardian ? $user->role_id : $request->role_id,
-            ]);
-
-            if ($request->filled('password')) {
-                $user->password = Hash::make($request->password);
-            }
-            $user->save();
-
-            if ($isGuardian) {
-                Guardian::updateOrCreate(
-                    ['user_id' => $user->user_id],
-                    [
-                        'first_name'     => $request->first_name,
-                        'middle_name'    => $request->middle_name,
-                        'last_name'      => $request->last_name,
-                        'contact_number' => $request->contact_number_1,
-                        'relationship'   => $request->relationship,
-                        'address'        => '',
-                    ]
-                );
-            } else {
-                $user->permissions()->sync($request->permissions ?? []);
-            }
-
-            AuditLog::create([
-                'user_id'    => Auth::user()->user_id,
-                'action'     => 'UPDATE',
-                'table_name' => 'users',
-                'record_id'  => $user->user_id,
-                'changes'    => json_encode(['updated_user' => $user->username]),
-            ]);
-
-            DB::commit();
-        } catch (\Exception $e) {
-            DB::rollBack();
-            Log::error('User update failed', ['error' => $e->getMessage()]);
-            return back()->with('error', 'Failed to update user. Please try again.')->withInput();
+        if ($role && $role->role_name === 'guardian' && $user->guardian) {
+            $user->guardian->update(['relationship' => $request->relationship]);
         }
 
-        return redirect()->route('admin.users.index')
-            ->with('success', "User {$user->username} updated successfully.");
-    }
-
-    public function toggle($id)
-    {
-        $user            = User::findOrFail($id);
-        $user->is_active = !$user->is_active;
-        $user->save();
-        $status = $user->is_active ? 'activated' : 'deactivated';
+        if ($role && $role->role_name !== 'guardian' && $request->has('permissions')) {
+            DB::table('user_permissions')->where('user_id',$user->user_id)->delete();
+            foreach ($request->input('permissions',[]) as $permId) {
+                DB::table('user_permissions')->insertOrIgnore([
+                    'user_id'       => $user->user_id,
+                    'permission_id' => $permId,
+                ]);
+            }
+        }
 
         AuditLog::create([
             'user_id'    => Auth::user()->user_id,
             'action'     => 'UPDATE',
             'table_name' => 'users',
             'record_id'  => $user->user_id,
-            'changes'    => json_encode(['status' => $status]),
+            'changes'    => json_encode(['updated' => $user->username]),
         ]);
 
         return redirect()->route('admin.users.index')
-            ->with('success', "User {$user->username} has been {$status}.");
+            ->with('success','User updated successfully.');
     }
 
-    public function destroy($id)
+    public function toggle(string $id)
     {
         $user = User::findOrFail($id);
+        $user->update(['is_active' => !$user->is_active]);
 
-        if ($user->user_id === Auth::user()->user_id) {
-            return back()->with('error', 'You cannot delete your own account.');
-        }
+        AuditLog::create([
+            'user_id'    => Auth::user()->user_id,
+            'action'     => 'UPDATE',
+            'table_name' => 'users',
+            'record_id'  => $user->user_id,
+            'changes'    => json_encode(['is_active' => $user->is_active]),
+        ]);
 
-        $name = $user->full_name;
+        return back()->with('success','User status updated.');
+    }
+
+    public function destroy(string $id)
+    {
+        $user = User::findOrFail($id);
         $user->delete();
 
         AuditLog::create([
@@ -316,10 +320,10 @@ class UserController extends Controller
             'action'     => 'DELETE',
             'table_name' => 'users',
             'record_id'  => $id,
-            'changes'    => json_encode(['deleted_user' => $user->username]),
+            'changes'    => json_encode(['deleted' => $user->username]),
         ]);
 
         return redirect()->route('admin.users.index')
-            ->with('success', "User {$name} has been deleted.");
+            ->with('success','User deleted successfully.');
     }
 }

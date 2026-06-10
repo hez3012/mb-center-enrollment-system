@@ -40,41 +40,46 @@
     </div>
 @else
     @php
-        $activeStatuses = ['pending', 'pending_payment', 'payment_confirmed', 'enrolled'];
+        $activeStatuses = ['pending','pending_payment','payment_confirmed','enrolled'];
         $activeGroup    = $enrollments->filter(fn($e) => in_array($e->status, $activeStatuses));
         $withdrawnGroup = $enrollments->filter(fn($e) => $e->status === 'withdrawn');
         $rejectedGroup  = $enrollments->filter(fn($e) => $e->status === 'rejected');
 
         $sections = [];
         if ($activeGroup->isNotEmpty()) {
-            $sections[] = ['label' => 'Active Enrollments', 'icon' => 'bi-clipboard-check', 'color' => 'text-primary', 'items' => $activeGroup];
+            $sections[] = ['label'=>'Active Enrollments','icon'=>'bi-clipboard-check','color'=>'text-primary','items'=>$activeGroup];
         }
         if ($withdrawnGroup->isNotEmpty()) {
-            $sections[] = ['label' => 'Withdrawn', 'icon' => 'bi-clipboard-x', 'color' => 'text-secondary', 'items' => $withdrawnGroup];
+            $sections[] = ['label'=>'Withdrawn','icon'=>'bi-clipboard-x','color'=>'text-secondary','items'=>$withdrawnGroup];
         }
         if ($rejectedGroup->isNotEmpty()) {
-            $sections[] = ['label' => 'Rejected', 'icon' => 'bi-x-circle', 'color' => 'text-danger', 'items' => $rejectedGroup];
+            $sections[] = ['label'=>'Rejected','icon'=>'bi-x-circle','color'=>'text-danger','items'=>$rejectedGroup];
         }
     @endphp
 
     @foreach($sections as $section)
-        <div class="mb-2 mt-3">
-            <p class="fw-semibold small {{ $section['color'] }} mb-2">
-                <i class="bi {{ $section['icon'] }} me-1"></i>{{ $section['label'] }}
-            </p>
-        </div>
+        <p class="fw-semibold small {{ $section['color'] }} mb-2 mt-3">
+            <i class="bi {{ $section['icon'] }} me-1"></i>{{ $section['label'] }}
+        </p>
         <div class="row g-3 mb-2">
             @foreach($section['items'] as $enrollment)
                 <div class="col-md-6">
                     <div class="card border-0 shadow-sm h-100">
                         <div class="card-body">
                             <div class="d-flex justify-content-between align-items-start mb-2">
-                                <div>
-                                    <div class="fw-semibold">
-                                        {{ optional($enrollment->student)->full_name }}
-                                    </div>
-                                    <div class="text-muted small">
-                                        {{ optional($enrollment->schoolYear)->year_label }}
+                                <div class="d-flex align-items-center gap-2">
+                                    @include('partials.avatar',[
+                                        'name'  => optional($enrollment->student)->full_name ?? '?',
+                                        'image' => optional($enrollment->student)->profile_picture ?? null,
+                                        'size'  => 36,
+                                    ])
+                                    <div>
+                                        <div class="fw-semibold">
+                                            {{ optional($enrollment->student)->full_name }}
+                                        </div>
+                                        <div class="text-muted small">
+                                            {{ optional($enrollment->schoolYear)->year_label }}
+                                        </div>
                                     </div>
                                 </div>
                                 <span class="badge bg-{{ $enrollment->status_badge }}">
@@ -107,7 +112,7 @@
                                     {{ $enrollment->rejection_reason }}
                                 </div>
                             @endif
-                            <a href="{{ route('portal.enrollments.show', $enrollment->enrollment_id) }}"
+                            <a href="{{ route('portal.enrollments.show',$enrollment->enrollment_id) }}"
                                class="btn btn-sm btn-outline-primary w-100">
                                 <i class="bi bi-eye me-1"></i>View Details
                             </a>
@@ -118,5 +123,4 @@
         </div>
     @endforeach
 @endif
-
 @endsection

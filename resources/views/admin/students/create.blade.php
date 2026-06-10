@@ -15,13 +15,31 @@
               enctype="multipart/form-data">
             @csrf
 
+            {{-- Profile Picture --}}
+            <p class="fw-semibold text-primary small mb-2">
+                <i class="bi bi-person-circle me-1"></i>Profile Picture
+            </p>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <input type="file" name="profile_picture"
+                           class="form-control @error('profile_picture') is-invalid @enderror"
+                           accept=".jpg,.jpeg,.png">
+                    @error('profile_picture')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                    <small class="text-muted">JPG or PNG only · Max 2MB · Optional</small>
+                </div>
+            </div>
+
             {{-- Personal Information --}}
             <p class="fw-semibold text-primary small mb-2">
                 <i class="bi bi-person me-1"></i>Personal Information
             </p>
             <div class="row g-3 mb-4">
                 <div class="col-md-4">
-                    <label class="form-label fw-semibold">First Name</label>
+                    <label class="form-label fw-semibold">
+                        First Name <span class="text-danger">*</span>
+                    </label>
                     <input type="text" name="first_name"
                            class="form-control @error('first_name') is-invalid @enderror"
                            value="{{ old('first_name') }}" required>
@@ -37,7 +55,9 @@
                     @error('middle_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-semibold">Last Name</label>
+                    <label class="form-label fw-semibold">
+                        Last Name <span class="text-danger">*</span>
+                    </label>
                     <input type="text" name="last_name"
                            class="form-control @error('last_name') is-invalid @enderror"
                            value="{{ old('last_name') }}" required>
@@ -49,9 +69,9 @@
                            readonly placeholder="Auto"
                            value="{{ old('middle_name') ? strtoupper(substr(old('middle_name'),0,1)).'.' : '' }}">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <label class="form-label fw-semibold">
-                        Birthdate <span class="text-muted small fw-normal">(mm/dd/yyyy)</span>
+                        Birthdate <span class="text-danger">*</span>
                     </label>
                     <input type="date" name="birthdate" id="birthdateInput"
                            class="form-control @error('birthdate') is-invalid @enderror"
@@ -63,54 +83,27 @@
                     <input type="text" id="ageDisplay" class="form-control bg-light"
                            readonly placeholder="Auto">
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold">Sex</label>
+                <div class="col-md-3">
+                    <label class="form-label fw-semibold">
+                        Sex <span class="text-danger">*</span>
+                    </label>
                     <select name="sex" id="sexSelect"
                             class="form-select @error('sex') is-invalid @enderror" required>
                         <option value="">-- Select --</option>
-                        <option value="male"               {{ old('sex') == 'male'               ? 'selected' : '' }}>Male</option>
-                        <option value="female"             {{ old('sex') == 'female'             ? 'selected' : '' }}>Female</option>
-                        <option value="others"             {{ old('sex') == 'others'             ? 'selected' : '' }}>Others (please specify)</option>
-                        <option value="prefer_not_to_say"  {{ old('sex') == 'prefer_not_to_say'  ? 'selected' : '' }}>Prefer not to say</option>
+                        @foreach(['male'=>'Male','female'=>'Female','others'=>'Others','prefer_not_to_say'=>'Prefer not to say'] as $val => $label)
+                            <option value="{{ $val }}" {{ old('sex') == $val ? 'selected' : '' }}>
+                                {{ $label }}
+                            </option>
+                        @endforeach
                     </select>
                     @error('sex')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    <div id="sexSpecifyDiv" class="mt-2 d-none">
-                        <input type="text" name="sex_specify"
-                               class="form-control @error('sex_specify') is-invalid @enderror"
-                               placeholder="Please specify"
-                               value="{{ old('sex_specify') }}">
-                        @error('sex_specify')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                    </div>
                 </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold">Status</label>
-                    <select name="status" id="statusSelect"
-                            class="form-select @error('status') is-invalid @enderror" required>
-                        <option value="active"    {{ old('status','active') == 'active'    ? 'selected' : '' }}>Active</option>
-                        <option value="inactive"  {{ old('status') == 'inactive'  ? 'selected' : '' }}>Inactive</option>
-                        <option value="withdrawn" {{ old('status') == 'withdrawn' ? 'selected' : '' }}>Withdrawn</option>
-                        <option value="completed" {{ old('status') == 'completed' ? 'selected' : '' }}>Completed</option>
-                    </select>
-                    <small class="text-muted" id="statusDesc"></small>
-                    @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold">
-                        Contact #1 <span class="text-muted small fw-normal">(optional)</span>
-                    </label>
-                    <input type="text" name="contact_number_1"
-                           class="form-control @error('contact_number_1') is-invalid @enderror"
-                           value="{{ old('contact_number_1') }}">
-                    @error('contact_number_1')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label fw-semibold">
-                        Contact #2 <span class="text-muted small fw-normal">(optional)</span>
-                    </label>
-                    <input type="text" name="contact_number_2"
-                           class="form-control @error('contact_number_2') is-invalid @enderror"
-                           value="{{ old('contact_number_2') }}">
-                    @error('contact_number_2')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                <div class="col-md-4" id="sexSpecifyWrapper" style="display:none;">
+                    <label class="form-label fw-semibold">Please specify</label>
+                    <input type="text" name="sex_specify"
+                           class="form-control @error('sex_specify') is-invalid @enderror"
+                           value="{{ old('sex_specify') }}">
+                    @error('sex_specify')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
             </div>
 
@@ -136,39 +129,41 @@
                 ])
             </div>
 
-            {{-- Academic Information --}}
+            {{-- School Information --}}
             <p class="fw-semibold text-primary small mb-2">
-                <i class="bi bi-mortarboard me-1"></i>Academic Information
+                <i class="bi bi-mortarboard me-1"></i>School Information
             </p>
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">Guardian</label>
+                    <label class="form-label fw-semibold">
+                        Guardian <span class="text-danger">*</span>
+                    </label>
                     <select name="guardian_id"
                             class="form-select @error('guardian_id') is-invalid @enderror" required>
                         <option value="">-- Select Guardian --</option>
                         @foreach($guardians as $guardian)
                             <option value="{{ $guardian->guardian_id }}"
                                     {{ old('guardian_id') == $guardian->guardian_id ? 'selected' : '' }}>
-                                {{ $guardian->full_name }}
+                                {{ optional($guardian->user)->list_name }}
                             </option>
                         @endforeach
                     </select>
                     @error('guardian_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">Program Level</label>
-                    <select name="program_level_id" id="programLevelSelect"
+                    <label class="form-label fw-semibold">
+                        Program Level <span class="text-danger">*</span>
+                    </label>
+                    <select name="program_level_id"
                             class="form-select @error('program_level_id') is-invalid @enderror" required>
-                        <option value="">-- Select Program Level --</option>
+                        <option value="">-- Select Program --</option>
                         @foreach($programLevels as $level)
                             <option value="{{ $level->program_level_id }}"
-                                    data-desc="{{ $level->description }}"
                                     {{ old('program_level_id') == $level->program_level_id ? 'selected' : '' }}>
                                 {{ $level->program_name }}
                             </option>
                         @endforeach
                     </select>
-                    <small class="text-muted" id="programDesc"></small>
                     @error('program_level_id')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-6">
@@ -178,11 +173,11 @@
                     </label>
                     <select name="dev_ped_id"
                             class="form-select @error('dev_ped_id') is-invalid @enderror">
-                        <option value="">-- None --</option>
-                        @foreach($devPeds as $devPed)
-                            <option value="{{ $devPed->dev_ped_id }}"
-                                    {{ old('dev_ped_id') == $devPed->dev_ped_id ? 'selected' : '' }}>
-                                {{ $devPed->full_name }} — {{ $devPed->clinic_hospital }}
+                        <option value="">-- Select --</option>
+                        @foreach($devPeds as $ped)
+                            <option value="{{ $ped->dev_ped_id }}"
+                                    {{ old('dev_ped_id') == $ped->dev_ped_id ? 'selected' : '' }}>
+                                {{ $ped->name }}
                             </option>
                         @endforeach
                     </select>
@@ -190,47 +185,41 @@
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">
-                        Dev. Ped. Assessment Document
-                        <span class="text-muted small fw-normal">(optional — PDF/JPG/PNG, max 5MB)</span>
+                        Status <span class="text-danger">*</span>
                     </label>
-                    <input type="file" name="dev_ped_document"
-                           class="form-control @error('dev_ped_document') is-invalid @enderror"
-                           accept=".pdf,.jpg,.jpeg,.png">
-                    @error('dev_ped_document')<div class="invalid-feedback">{{ $message }}</div>@enderror
+                    <select name="status"
+                            class="form-select @error('status') is-invalid @enderror" required>
+                        @foreach(['active'=>'Active','inactive'=>'Inactive','withdrawn'=>'Withdrawn','completed'=>'Completed'] as $val => $label)
+                            <option value="{{ $val }}"
+                                    {{ old('status', 'active') === $val ? 'selected' : '' }}>
+                                {{ $label }}
+                            </option>
+                        @endforeach
+                    </select>
+                    @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
-            </div>
-
-            {{-- Disability Classifications --}}
-            <p class="fw-semibold text-primary small mb-2">
-                <i class="bi bi-clipboard-pulse me-1"></i>Disability Classifications
-            </p>
-            <div class="border rounded p-3 mb-4 bg-light">
-                <p class="text-muted small mb-3">Select all that apply. Choose "Others" for conditions not listed.</p>
-                <div class="row g-2">
-                    @foreach($disabilities as $disability)
-                    <div class="col-md-4">
-                        <div class="form-check">
-                            <input class="form-check-input disability-check"
-                                   type="checkbox"
-                                   name="disabilities[]"
-                                   value="{{ $disability->disability_id }}"
-                                   id="dis_{{ $disability->disability_id }}"
-                                   {{ in_array($disability->disability_id, old('disabilities', [])) ? 'checked' : '' }}>
-                            <label class="form-check-label small"
-                                   for="dis_{{ $disability->disability_id }}">
-                                {{ $disability->disability_name }}
-                            </label>
-                        </div>
-                        @if($disability->disability_name === 'Others')
-                        <div id="othersSpecifyDiv" class="mt-2 ms-4 d-none">
-                            <input type="text" name="disability_others_specify"
-                                   class="form-control form-control-sm"
-                                   placeholder="Please specify condition"
-                                   value="{{ old('disability_others_specify') }}">
-                        </div>
-                        @endif
+                <div class="col-md-12">
+                    <label class="form-label fw-semibold">
+                        Disabilities
+                        <span class="text-muted small fw-normal">(optional)</span>
+                    </label>
+                    <div class="row g-2">
+                        @foreach($disabilities as $disability)
+                            <div class="col-md-4">
+                                <div class="form-check">
+                                    <input class="form-check-input" type="checkbox"
+                                           name="disabilities[]"
+                                           value="{{ $disability->disability_id }}"
+                                           id="dis_{{ $disability->disability_id }}"
+                                           {{ in_array($disability->disability_id, old('disabilities', [])) ? 'checked' : '' }}>
+                                    <label class="form-check-label small"
+                                           for="dis_{{ $disability->disability_id }}">
+                                        {{ $disability->disability_name }}
+                                    </label>
+                                </div>
+                            </div>
+                        @endforeach
                     </div>
-                    @endforeach
                 </div>
             </div>
 
@@ -242,59 +231,28 @@
 </div>
 
 <script>
-// M.I. auto-fill
-document.getElementById('middleNameInput').addEventListener('input', function () {
-    const mi = this.value.trim();
+document.getElementById('middleNameInput').addEventListener('input', function() {
+    var mi = this.value.trim();
     document.getElementById('miDisplay').value = mi ? mi[0].toUpperCase() + '.' : '';
 });
 
-// Age auto-fill
-document.getElementById('birthdateInput').addEventListener('change', function () {
+document.getElementById('birthdateInput').addEventListener('change', function() {
     if (!this.value) { document.getElementById('ageDisplay').value = ''; return; }
-    const birth = new Date(this.value);
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
+    var birth = new Date(this.value);
+    var today = new Date();
+    var age = today.getFullYear() - birth.getFullYear();
     if (today.getMonth() < birth.getMonth() ||
-       (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
+       (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) { age--; }
     document.getElementById('ageDisplay').value = age + ' years old';
 });
 
-// Sex "Others" toggle
-document.getElementById('sexSelect').addEventListener('change', function () {
-    document.getElementById('sexSpecifyDiv').classList.toggle('d-none', this.value !== 'others');
+document.getElementById('sexSelect').addEventListener('change', function() {
+    var wrapper = document.getElementById('sexSpecifyWrapper');
+    wrapper.style.display = this.value === 'others' ? '' : 'none';
 });
 
-// Status description
-const statusDescriptions = {
-    active:    'Student is currently enrolled and attending the program.',
-    inactive:  'Student account is disabled and not currently attending.',
-    withdrawn: 'Student has officially withdrawn from the program.',
-    completed: 'Student has successfully completed the program.',
-};
-const statusSel  = document.getElementById('statusSelect');
-const statusDesc = document.getElementById('statusDesc');
-statusSel.addEventListener('change', function () {
-    statusDesc.textContent = statusDescriptions[this.value] || '';
-});
-statusDesc.textContent = statusDescriptions[statusSel.value] || '';
-
-// Program Level description
-const programDesc = document.getElementById('programDesc');
-const programSel  = document.getElementById('programLevelSelect');
-programSel.addEventListener('change', function () {
-    const opt = this.options[this.selectedIndex];
-    programDesc.textContent = opt ? (opt.getAttribute('data-desc') || '') : '';
-});
-
-// Disability "Others" specify toggle
-document.querySelectorAll('.disability-check').forEach(cb => {
-    cb.addEventListener('change', function () {
-        const label = document.querySelector(`label[for="${this.id}"]`);
-        if (label && label.textContent.trim() === 'Others') {
-            const div = document.getElementById('othersSpecifyDiv');
-            if (div) div.classList.toggle('d-none', !this.checked);
-        }
-    });
-});
+if (document.getElementById('sexSelect').value === 'others') {
+    document.getElementById('sexSpecifyWrapper').style.display = '';
+}
 </script>
 @endsection

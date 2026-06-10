@@ -5,82 +5,100 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Student;
 use App\Models\Guardian;
-use App\Models\Disability;
 use App\Models\ProgramLevel;
+use App\Models\Disability;
 use App\Models\DevelopmentalPediatrician;
 use App\Models\AuditLog;
 use App\Helpers\PhilippinesGeo;
 
 class StudentController extends Controller
 {
-    private function geoData(): array
-    {
-        return [
-            'regions'   => PhilippinesGeo::regions(),
-            'provinces' => PhilippinesGeo::provinces(),
-            'cities'    => PhilippinesGeo::cities(),
-        ];
-    }
-
     public function index()
     {
-        $students      = Student::with(['guardian', 'programLevel', 'disabilities'])->get();
+        $students      = Student::with(['guardian.user','programLevel','disabilities'])
+            ->whereNull('deleted_at')->get();
         $programLevels = ProgramLevel::all();
         $disabilities  = Disability::all();
-        return view('admin.students.index', compact('students', 'programLevels', 'disabilities'));
+
+        return view('admin.students.index', compact('students','programLevels','disabilities'));
     }
 
     public function create()
     {
-        $guardians     = Guardian::all();
-        $disabilities  = Disability::all();
+        $guardians     = Guardian::with('user')
+            ->whereHas('user', fn($q) => $q->whereNull('deleted_at'))->get();
         $programLevels = ProgramLevel::all();
+        $disabilities  = Disability::all();
         $devPeds       = DevelopmentalPediatrician::all();
+
+        $geo       = new PhilippinesGeo();
+        $regions   = $geo->getRegions();
+        $provinces = $geo->getProvinces('');
+        $cities    = $geo->getCities('');
+
         return view('admin.students.create', compact(
-            'guardians', 'disabilities', 'programLevels', 'devPeds'
-        ) + $this->geoData());
+            'guardians','programLevels','disabilities','devPeds',
+            'regions','provinces','cities'
+        ));
     }
 
     public function store(Request $request)
     {
         $request->validate([
-            'first_name'       => 'required|string|max:50',
-            'middle_name'      => 'nullable|string|max:50',
-            'last_name'        => 'required|string|max:50',
+            'first_name'       => 'required|string|max:100',
+            'middle_name'      => 'nullable|string|max:100',
+            'last_name'        => 'required|string|max:100',
             'birthdate'        => 'required|date',
             'sex'              => 'required|in:male,female,others,prefer_not_to_say',
-            'sex_specify'      => 'nullable|required_if:sex,others|string|max:100',
-            'contact_number_1' => 'nullable|string|max:20',
-            'contact_number_2' => 'nullable|string|max:20',
-            'region'           => 'nullable|string|max:100',
-            'province'         => 'nullable|string|max:100',
-            'city'             => 'nullable|string|max:100',
-            'house_unit_no'    => 'nullable|string|max:100',
-            'street'           => 'nullable|string|max:100',
-            'barangay'         => 'nullable|string|max:100',
-            'zip_code'         => 'nullable|string|max:10',
+            'sex_specify'      => 'nullable|string|max:100',
             'status'           => 'required|in:active,inactive,withdrawn,completed',
-            'guardian_id'      => 'required|exists:guardian,guardian_id',
             'program_level_id' => 'required|exists:program_level,program_level_id',
+            'guardian_id'      => 'required|exists:guardian,guardian_id',
             'dev_ped_id'       => 'nullable|exists:developmental_pediatrician,dev_ped_id',
-            'dev_ped_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'disabilities'     => 'array',
+            'dev_ped_document' => 'nullable|string|max:255',
+            'region'           => 'required|string|max:100',
+            'province'         => 'required|string|max:100',
+            'city'             => 'required|string|max:100',
+            'barangay'         => 'required|string|max:100',
+            'house_unit_no'    => 'required|string|max:100',
+            'street'           => 'required|string|max:100',
+            'zip_code'         => 'required|string|max:10',
+            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'disabilities'     => 'nullable|array',
         ]);
 
-        $data = $request->except(['disabilities', 'dev_ped_document', '_token']);
-
-        if ($request->hasFile('dev_ped_document')) {
-            $data['dev_ped_document'] = $request->file('dev_ped_document')
-                ->store('dev_ped_documents', 'public');
+        $picturePath = null;
+        if ($request->hasFile('profile_picture')) {
+            $picturePath = $request->file('profile_picture')
+                ->store('profile_pictures/students','public');
         }
 
-        $student = Student::create($data);
+        $student = Student::create([
+            'first_name'       => $request->first_name,
+            'middle_name'      => $request->middle_name,
+            'last_name'        => $request->last_name,
+            'birthdate'        => $request->birthdate,
+            'sex'              => $request->sex,
+            'sex_specify'      => $request->sex_specify,
+            'status'           => $request->status,
+            'profile_picture'  => $picturePath,
+            'region'           => $request->region,
+            'province'         => $request->province,
+            'city'             => $request->city,
+            'barangay'         => $request->barangay,
+            'house_unit_no'    => $request->house_unit_no,
+            'street'           => $request->street,
+            'zip_code'         => $request->zip_code,
+            'guardian_id'      => $request->guardian_id,
+            'program_level_id' => $request->program_level_id,
+            'dev_ped_id'       => $request->dev_ped_id,
+            'dev_ped_document' => $request->dev_ped_document,
+        ]);
 
-        if ($request->has('disabilities')) {
+        if ($request->filled('disabilities')) {
             $student->disabilities()->sync($request->disabilities);
         }
 
@@ -89,96 +107,114 @@ class StudentController extends Controller
             'action'     => 'CREATE',
             'table_name' => 'student',
             'record_id'  => $student->student_id,
-            'changes'    => json_encode(['created_student' => $student->full_name]),
+            'changes'    => json_encode(['name' => $student->full_name]),
         ]);
 
         return redirect()->route('admin.students.index')
-            ->with('success', "Student {$student->full_name} created successfully.");
+            ->with('success','Student created successfully.');
     }
 
-    public function show($id)
+    public function show(string $id)
     {
-        $student = Student::with([
-            'guardian', 'programLevel',
-            'disabilities', 'developmentalPediatrician'
-        ])->findOrFail($id);
+        $student = Student::with(['guardian.user','programLevel','disabilities','devPed'])
+            ->findOrFail($id);
+
         return view('admin.students.show', compact('student'));
     }
 
-    public function edit($id)
+    public function edit(string $id)
     {
-        $student       = Student::with('disabilities')->findOrFail($id);
-        $guardians     = Guardian::all();
-        $disabilities  = Disability::all();
+        $student       = Student::with(['disabilities'])->findOrFail($id);
+        $guardians     = Guardian::with('user')
+            ->whereHas('user', fn($q) => $q->whereNull('deleted_at'))->get();
         $programLevels = ProgramLevel::all();
+        $disabilities  = Disability::all();
         $devPeds       = DevelopmentalPediatrician::all();
+
+        $geo       = new PhilippinesGeo();
+        $regions   = $geo->getRegions();
+        $provinces = $geo->getProvinces($student->region ?? '');
+        $cities    = $geo->getCities($student->province ?? '');
+
         return view('admin.students.edit', compact(
-            'student', 'guardians', 'disabilities', 'programLevels', 'devPeds'
-        ) + $this->geoData());
+            'student','guardians','programLevels','disabilities','devPeds',
+            'regions','provinces','cities'
+        ));
     }
 
-    public function update(Request $request, $id)
+    public function update(Request $request, string $id)
     {
         $student = Student::findOrFail($id);
 
         $request->validate([
-            'first_name'       => 'required|string|max:50',
-            'middle_name'      => 'nullable|string|max:50',
-            'last_name'        => 'required|string|max:50',
+            'first_name'       => 'required|string|max:100',
+            'middle_name'      => 'nullable|string|max:100',
+            'last_name'        => 'required|string|max:100',
             'birthdate'        => 'required|date',
             'sex'              => 'required|in:male,female,others,prefer_not_to_say',
-            'sex_specify'      => 'nullable|required_if:sex,others|string|max:100',
-            'contact_number_1' => 'nullable|string|max:20',
-            'contact_number_2' => 'nullable|string|max:20',
-            'region'           => 'nullable|string|max:100',
-            'province'         => 'nullable|string|max:100',
-            'city'             => 'nullable|string|max:100',
-            'house_unit_no'    => 'nullable|string|max:100',
-            'street'           => 'nullable|string|max:100',
-            'barangay'         => 'nullable|string|max:100',
-            'zip_code'         => 'nullable|string|max:10',
+            'sex_specify'      => 'nullable|string|max:100',
             'status'           => 'required|in:active,inactive,withdrawn,completed',
-            'guardian_id'      => 'required|exists:guardian,guardian_id',
             'program_level_id' => 'required|exists:program_level,program_level_id',
+            'guardian_id'      => 'required|exists:guardian,guardian_id',
             'dev_ped_id'       => 'nullable|exists:developmental_pediatrician,dev_ped_id',
-            'dev_ped_document' => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'disabilities'     => 'array',
+            'dev_ped_document' => 'nullable|string|max:255',
+            'region'           => 'required|string|max:100',
+            'province'         => 'required|string|max:100',
+            'city'             => 'required|string|max:100',
+            'barangay'         => 'required|string|max:100',
+            'house_unit_no'    => 'required|string|max:100',
+            'street'           => 'required|string|max:100',
+            'zip_code'         => 'required|string|max:10',
+            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'disabilities'     => 'nullable|array',
         ]);
 
-        $data = $request->except(['disabilities', 'dev_ped_document', '_token', '_method']);
-
-        if ($request->hasFile('dev_ped_document')) {
-            if ($student->dev_ped_document) {
-                Storage::disk('public')->delete($student->dev_ped_document);
-            }
-            $data['dev_ped_document'] = $request->file('dev_ped_document')
-                ->store('dev_ped_documents', 'public');
+        $picturePath = $student->profile_picture;
+        if ($request->hasFile('profile_picture')) {
+            if ($picturePath) Storage::disk('public')->delete($picturePath);
+            $picturePath = $request->file('profile_picture')
+                ->store('profile_pictures/students','public');
         }
 
-        $student->update($data);
-        $student->disabilities()->sync($request->disabilities ?? []);
+        $student->update([
+            'first_name'       => $request->first_name,
+            'middle_name'      => $request->middle_name,
+            'last_name'        => $request->last_name,
+            'birthdate'        => $request->birthdate,
+            'sex'              => $request->sex,
+            'sex_specify'      => $request->sex_specify,
+            'status'           => $request->status,
+            'profile_picture'  => $picturePath,
+            'region'           => $request->region,
+            'province'         => $request->province,
+            'city'             => $request->city,
+            'barangay'         => $request->barangay,
+            'house_unit_no'    => $request->house_unit_no,
+            'street'           => $request->street,
+            'zip_code'         => $request->zip_code,
+            'guardian_id'      => $request->guardian_id,
+            'program_level_id' => $request->program_level_id,
+            'dev_ped_id'       => $request->dev_ped_id,
+            'dev_ped_document' => $request->dev_ped_document,
+        ]);
+
+        $student->disabilities()->sync($request->input('disabilities',[]));
 
         AuditLog::create([
             'user_id'    => Auth::user()->user_id,
             'action'     => 'UPDATE',
             'table_name' => 'student',
             'record_id'  => $student->student_id,
-            'changes'    => json_encode(['updated_student' => $student->full_name]),
+            'changes'    => json_encode(['name' => $student->full_name]),
         ]);
 
         return redirect()->route('admin.students.index')
-            ->with('success', "Student {$student->full_name} updated successfully.");
+            ->with('success','Student updated successfully.');
     }
 
-    public function destroy($id)
+    public function destroy(string $id)
     {
         $student = Student::findOrFail($id);
-        $name    = $student->full_name;
-
-        if ($student->dev_ped_document) {
-            Storage::disk('public')->delete($student->dev_ped_document);
-        }
-
         $student->delete();
 
         AuditLog::create([
@@ -186,10 +222,10 @@ class StudentController extends Controller
             'action'     => 'DELETE',
             'table_name' => 'student',
             'record_id'  => $id,
-            'changes'    => json_encode(['deleted_student' => $name]),
+            'changes'    => json_encode(['deleted' => $id]),
         ]);
 
         return redirect()->route('admin.students.index')
-            ->with('success', "Student {$name} deleted successfully.");
+            ->with('success','Student deleted successfully.');
     }
 }

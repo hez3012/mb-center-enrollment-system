@@ -73,18 +73,18 @@
                     $currentUserId   = Auth::user()->user_id;
 
                     $categoryGroups = [
-                        ['key' => 'you',        'label' => 'You',        'icon' => 'bi-person-check',  'class' => 'table-primary',
-                         'users' => $users->filter(fn($u) => $u->user_id === $currentUserId)],
-                        ['key' => 'guardian',   'label' => 'Guardians',  'icon' => 'bi-person-heart',  'class' => 'table-secondary',
-                         'users' => $users->filter(fn($u) => $u->user_id !== $currentUserId && $u->role?->role_name === 'guardian')],
-                        ['key' => 'directress', 'label' => 'Directress', 'icon' => 'bi-award',         'class' => 'table-danger',
-                         'users' => $users->filter(fn($u) => $u->user_id !== $currentUserId && $u->role?->role_name === 'directress')],
-                        ['key' => 'admin',      'label' => 'Admins',     'icon' => 'bi-person-gear',   'class' => 'table-primary',
-                         'users' => $users->filter(fn($u) => $u->user_id !== $currentUserId && $u->role?->role_name === 'admin')],
-                        ['key' => 'teacher',    'label' => 'Teachers',   'icon' => 'bi-mortarboard',   'class' => 'table-success',
-                         'users' => $users->filter(fn($u) => $u->user_id !== $currentUserId && $u->role?->role_name === 'teacher')],
-                        ['key' => 'staff',      'label' => 'Staff',      'icon' => 'bi-person-badge',  'class' => 'table-info',
-                         'users' => $users->filter(fn($u) => $u->user_id !== $currentUserId && $u->role?->role_name === 'staff')],
+                        ['key'=>'you',        'label'=>'You',        'icon'=>'bi-person-check', 'class'=>'table-primary',
+                         'users'=>$users->filter(fn($u)=>$u->user_id===$currentUserId)],
+                        ['key'=>'guardian',   'label'=>'Guardians',  'icon'=>'bi-person-heart', 'class'=>'table-secondary',
+                         'users'=>$users->filter(fn($u)=>$u->user_id!==$currentUserId && $u->role?->role_name==='guardian')],
+                        ['key'=>'directress', 'label'=>'Directress', 'icon'=>'bi-award',        'class'=>'table-danger',
+                         'users'=>$users->filter(fn($u)=>$u->user_id!==$currentUserId && $u->role?->role_name==='directress')],
+                        ['key'=>'admin',      'label'=>'Admins',     'icon'=>'bi-person-gear',  'class'=>'table-primary',
+                         'users'=>$users->filter(fn($u)=>$u->user_id!==$currentUserId && $u->role?->role_name==='admin')],
+                        ['key'=>'teacher',    'label'=>'Teachers',   'icon'=>'bi-mortarboard',  'class'=>'table-success',
+                         'users'=>$users->filter(fn($u)=>$u->user_id!==$currentUserId && $u->role?->role_name==='teacher')],
+                        ['key'=>'staff',      'label'=>'Staff',      'icon'=>'bi-person-badge', 'class'=>'table-info',
+                         'users'=>$users->filter(fn($u)=>$u->user_id!==$currentUserId && $u->role?->role_name==='staff')],
                     ];
                 @endphp
 
@@ -102,8 +102,7 @@
                         <tr class="category-header {{ $group['class'] }}"
                             data-category="{{ $group['key'] }}">
                             <td colspan="7" class="py-2 px-3 fw-semibold small">
-                                <i class="bi {{ $group['icon'] }} me-1"></i>
-                                {{ $group['label'] }}
+                                <i class="bi {{ $group['icon'] }} me-1"></i>{{ $group['label'] }}
                             </td>
                         </tr>
                         @foreach($group['users'] as $user)
@@ -111,26 +110,23 @@
                                 $isMe           = $currentUserId === $user->user_id;
                                 $targetRoleName = $user->role?->role_name;
 
-                                $canEdit = !$isMe
-                                    && Auth::user()->hasPermission('edit_user')
+                                $canEdit = !$isMe && Auth::user()->hasPermission('edit_user')
                                     && match($currentRoleName) {
                                         'directress' => true,
                                         'admin'      => $targetRoleName !== 'directress',
-                                        'teacher'    => in_array($targetRoleName, ['staff', 'guardian']),
+                                        'teacher'    => in_array($targetRoleName,['staff','guardian']),
                                         default      => false,
                                     };
 
-                                $canToggle = !$isMe
-                                    && Auth::user()->hasPermission('edit_user')
+                                $canToggle = !$isMe && Auth::user()->hasPermission('edit_user')
                                     && match($currentRoleName) {
                                         'directress' => true,
                                         'admin'      => $targetRoleName !== 'directress',
-                                        'teacher'    => in_array($targetRoleName, ['staff', 'guardian']),
+                                        'teacher'    => in_array($targetRoleName,['staff','guardian']),
                                         default      => false,
                                     };
 
-                                $canDelete = !$isMe
-                                    && Auth::user()->hasPermission('delete_user')
+                                $canDelete = !$isMe && Auth::user()->hasPermission('delete_user')
                                     && match($currentRoleName) {
                                         'directress' => true,
                                         'admin'      => $targetRoleName !== 'directress',
@@ -142,26 +138,23 @@
                                 data-modified="{{ $user->updated_at?->timestamp ?? 0 }}"
                                 data-role="{{ $targetRoleName }}"
                                 data-status="{{ $user->is_active ? 'active' : 'inactive' }}"
-                                data-search="{{ strtolower($user->list_name . ' ' . $user->email . ' ' . $user->username) }}">
+                                data-search="{{ strtolower($user->list_name.' '.$user->email.' '.$user->username) }}">
                                 <td>{{ $user->user_id }}</td>
                                 <td>
-                                    {{ $user->list_name }}
-                                    @if($isMe)
-                                        <span class="badge bg-primary ms-1">You</span>
-                                    @endif
+                                    <div class="d-flex align-items-center gap-2">
+                                        @include('partials.avatar',['name'=>$user->list_name,'image'=>$user->profile_picture,'size'=>32])
+                                        <div>
+                                            {{ $user->list_name }}
+                                            @if($isMe)
+                                                <span class="badge bg-primary ms-1">You</span>
+                                            @endif
+                                        </div>
+                                    </div>
                                 </td>
                                 <td>{{ $user->username }}</td>
                                 <td>{{ $user->email }}</td>
                                 <td>
-                                    @php
-                                        $roleColors = [
-                                            'directress' => 'danger',
-                                            'admin'      => 'primary',
-                                            'teacher'    => 'success',
-                                            'staff'      => 'info',
-                                            'guardian'   => 'secondary',
-                                        ];
-                                    @endphp
+                                    @php $roleColors=['directress'=>'danger','admin'=>'primary','teacher'=>'success','staff'=>'info','guardian'=>'secondary']; @endphp
                                     <span class="badge bg-{{ $roleColors[$targetRoleName] ?? 'secondary' }}">
                                         {{ ucfirst($targetRoleName) }}
                                     </span>
@@ -174,27 +167,27 @@
                                 <td>
                                     <div class="d-flex gap-1">
                                         @if(Auth::user()->hasPermission('view_user'))
-                                            <a href="{{ route('admin.users.show', $user->user_id) }}"
+                                            <a href="{{ route('admin.users.show',$user->user_id) }}"
                                                class="btn btn-sm btn-outline-info" title="View">
                                                 <i class="bi bi-eye"></i>
                                             </a>
                                         @endif
                                         @if($canEdit)
-                                            <a href="{{ route('admin.users.edit', $user->user_id) }}"
+                                            <a href="{{ route('admin.users.edit',$user->user_id) }}"
                                                class="btn btn-sm btn-outline-primary" title="Edit">
                                                 <i class="bi bi-pencil"></i>
                                             </a>
                                         @endif
                                         @if($canToggle)
                                             <form method="POST"
-                                                  action="{{ route('admin.users.toggle', $user->user_id) }}"
+                                                  action="{{ route('admin.users.toggle',$user->user_id) }}"
                                                   class="d-inline">
                                                 @csrf
                                                 @method('PATCH')
                                                 <button type="submit"
-                                                        class="btn btn-sm btn-outline-{{ $user->is_active ? 'warning' : 'success' }}"
-                                                        title="{{ $user->is_active ? 'Deactivate' : 'Activate' }}">
-                                                    <i class="bi bi-{{ $user->is_active ? 'person-x' : 'person-check' }}"></i>
+                                                        class="btn btn-sm btn-outline-{{ $user->is_active ? 'warning':'success' }}"
+                                                        title="{{ $user->is_active ? 'Deactivate':'Activate' }}">
+                                                    <i class="bi bi-{{ $user->is_active ? 'person-x':'person-check' }}"></i>
                                                 </button>
                                             </form>
                                         @endif
@@ -202,7 +195,7 @@
                                             <button class="btn btn-sm btn-outline-danger" title="Delete"
                                                     data-id="{{ $user->user_id }}"
                                                     data-name="{{ $user->list_name }}"
-                                                    onclick="confirmDelete(this.dataset.id, this.dataset.name)">
+                                                    onclick="confirmDelete(this.dataset.id,this.dataset.name)">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         @endif
@@ -211,7 +204,7 @@
                             </tr>
                         @endforeach
                         <tr class="category-spacer">
-                            <td colspan="7" style="height:10px; border:none; padding:0;"></td>
+                            <td colspan="7" style="height:10px;border:none;padding:0;"></td>
                         </tr>
                     @endif
                 @endforeach
@@ -257,16 +250,14 @@ var roleFilter   = document.getElementById('roleFilter');
 var statusFilter = document.getElementById('statusFilter');
 var tbody        = document.querySelector('#usersTable tbody');
 
-Array.from(tbody.querySelectorAll('tr')).forEach(function(el, i) {
-    el.dataset.originalOrder = i;
-});
+Array.from(tbody.querySelectorAll('tr')).forEach(function(el,i){ el.dataset.originalOrder=i; });
 
 function applyFilters() {
     var search    = searchInput.value.toLowerCase().trim();
     var sort      = sortSelect.value;
     var role      = roleFilter.value;
     var status    = statusFilter.value;
-    var hasFilter = search !== '' || role !== '' || status !== '' || sort !== 'default';
+    var hasFilter = search!==''||role!==''||status!==''||sort!=='default';
 
     var categoryHeaders = Array.from(tbody.querySelectorAll('tr.category-header'));
     var categorySpacers = Array.from(tbody.querySelectorAll('tr.category-spacer'));
@@ -275,58 +266,53 @@ function applyFilters() {
 
     if (!hasFilter) {
         Array.from(tbody.querySelectorAll('tr'))
-            .sort(function(a, b) {
-                return parseInt(a.dataset.originalOrder || 0) - parseInt(b.dataset.originalOrder || 0);
-            })
-            .forEach(function(el) { tbody.appendChild(el); });
-
-        categoryHeaders.forEach(function(h) { h.style.display = ''; });
-        categorySpacers.forEach(function(s) { s.style.display = ''; });
-        dataRows.forEach(function(r) { r.style.display = ''; });
-        noResultsDiv.style.display = 'none';
+            .sort(function(a,b){ return parseInt(a.dataset.originalOrder||0)-parseInt(b.dataset.originalOrder||0); })
+            .forEach(function(el){ tbody.appendChild(el); });
+        categoryHeaders.forEach(function(h){ h.style.display=''; });
+        categorySpacers.forEach(function(s){ s.style.display=''; });
+        dataRows.forEach(function(r){ r.style.display=''; });
+        noResultsDiv.style.display='none';
         return;
     }
 
-    categoryHeaders.forEach(function(h) { h.style.display = 'none'; });
-    categorySpacers.forEach(function(s) { s.style.display = 'none'; });
+    categoryHeaders.forEach(function(h){ h.style.display='none'; });
+    categorySpacers.forEach(function(s){ s.style.display='none'; });
 
-    dataRows.forEach(function(row) {
-        var show = true;
-        if (search && !(row.dataset.search || '').includes(search)) { show = false; }
-        if (role   && row.dataset.role   !== role)                   { show = false; }
-        if (status && row.dataset.status !== status)                 { show = false; }
-        row.style.display = show ? '' : 'none';
+    dataRows.forEach(function(row){
+        var show=true;
+        if(search&&!(row.dataset.search||'').includes(search)){show=false;}
+        if(role&&row.dataset.role!==role){show=false;}
+        if(status&&row.dataset.status!==status){show=false;}
+        row.style.display=show?'':'none';
     });
 
-    var visible = dataRows.filter(function(r) { return r.style.display !== 'none'; });
-    noResultsDiv.style.display = (visible.length === 0) ? '' : 'none';
+    var visible=dataRows.filter(function(r){return r.style.display!=='none';});
+    noResultsDiv.style.display=(visible.length===0)?'':'none';
 
-    visible.sort(function(a, b) {
-        if (sort === 'az')       return (a.dataset.name || '').localeCompare(b.dataset.name || '');
-        if (sort === 'za')       return (b.dataset.name || '').localeCompare(a.dataset.name || '');
-        if (sort === 'created')  return (b.dataset.created || 0) - (a.dataset.created || 0);
-        if (sort === 'modified') return (b.dataset.modified || 0) - (a.dataset.modified || 0);
+    visible.sort(function(a,b){
+        if(sort==='az') return (a.dataset.name||'').localeCompare(b.dataset.name||'');
+        if(sort==='za') return (b.dataset.name||'').localeCompare(a.dataset.name||'');
+        if(sort==='created')  return (b.dataset.created||0)-(a.dataset.created||0);
+        if(sort==='modified') return (b.dataset.modified||0)-(a.dataset.modified||0);
         return 0;
     });
-    visible.forEach(function(r) { tbody.appendChild(r); });
+    visible.forEach(function(r){ tbody.appendChild(r); });
 }
 
-function clearFilters() {
-    searchInput.value  = '';
-    sortSelect.value   = 'default';
-    roleFilter.value   = '';
-    statusFilter.value = '';
+function clearFilters(){
+    searchInput.value=''; sortSelect.value='default';
+    roleFilter.value=''; statusFilter.value='';
     applyFilters();
 }
 
-function confirmDelete(id, name) {
-    document.getElementById('deleteUserName').textContent = name;
-    document.getElementById('deleteForm').action = '/admin/users/' + id;
+function confirmDelete(id,name){
+    document.getElementById('deleteUserName').textContent=name;
+    document.getElementById('deleteForm').action='/admin/users/'+id;
     new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 
-[searchInput, sortSelect, roleFilter, statusFilter].forEach(function(el) {
-    el.addEventListener('input', applyFilters);
+[searchInput,sortSelect,roleFilter,statusFilter].forEach(function(el){
+    el.addEventListener('input',applyFilters);
 });
 
 applyFilters();

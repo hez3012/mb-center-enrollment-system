@@ -2,29 +2,63 @@
 @section('title', 'Profile Settings')
 @section('content')
 
-<h5 class="fw-bold mb-3">
-    <i class="bi bi-person-gear me-2"></i>Profile Settings
-</h5>
+@php
+    /** @var \App\Models\User $me */
+    $me     = auth()->user();
+    $meFN   = $me->first_name   ?? '';
+    $meMN   = $me->middle_name  ?? '';
+    $meLN   = $me->last_name    ?? '';
+    $meName = trim($meFN . ' ' . $meLN);
+    $meMI   = $meMN ? strtoupper(substr(trim($meMN), 0, 1)) . '.' : '';
+    $meBD   = $me->birthdate;
+    $meAge  = '';
+    if ($meBD) {
+        $bd    = ($meBD instanceof \Carbon\Carbon) ? $meBD : \Carbon\Carbon::parse($meBD);
+        $meAge = $bd->age . ' years old';
+    }
+@endphp
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h5 class="fw-bold mb-0">Profile Settings</h5>
+</div>
 
 @if(session('success'))
     <div class="alert alert-success alert-dismissible fade show">
-        <i class="bi bi-check-circle me-1"></i>{{ session('success') }}
+        <i class="bi bi-check-circle me-2"></i>{{ session('success') }}
         <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
     </div>
 @endif
 
-@if(session('error'))
-    <div class="alert alert-danger alert-dismissible fade show">
-        <i class="bi bi-exclamation-circle me-1"></i>{{ session('error') }}
-        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-    </div>
-@endif
-
-<div class="card border-0 shadow-sm mb-4">
-    <div class="card-header bg-white fw-semibold">Account Information</div>
+<div class="card border-0 shadow-sm">
     <div class="card-body">
-        <form method="POST" action="{{ route('admin.profile.update') }}">
-            @csrf @method('PUT')
+        <form method="POST" action="{{ route('admin.profile.update') }}"
+              enctype="multipart/form-data">
+            @csrf
+            @method('PUT')
+
+            {{-- Profile Picture --}}
+            <p class="fw-semibold text-primary small mb-2">
+                <i class="bi bi-person-circle me-1"></i>Profile Picture
+            </p>
+            <div class="row g-3 mb-4">
+                <div class="col-md-6">
+                    <div class="d-flex align-items-center gap-3 mb-2">
+                        @include('partials.avatar',[
+                            'name'  => $meName,
+                            'image' => $me->profile_picture,
+                            'size'  => 64,
+                        ])
+                        <span class="text-muted small">Current picture</span>
+                    </div>
+                    <input type="file" name="profile_picture"
+                           class="form-control @error('profile_picture') is-invalid @enderror"
+                           accept=".jpg,.jpeg,.png">
+                    @error('profile_picture')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                    <small class="text-muted">JPG or PNG only · Max 2MB · Optional</small>
+                </div>
+            </div>
 
             {{-- Personal Information --}}
             <p class="fw-semibold text-primary small mb-2">
@@ -32,10 +66,12 @@
             </p>
             <div class="row g-3 mb-4">
                 <div class="col-md-4">
-                    <label class="form-label fw-semibold">First Name</label>
+                    <label class="form-label fw-semibold">
+                        First Name <span class="text-danger">*</span>
+                    </label>
                     <input type="text" name="first_name"
                            class="form-control @error('first_name') is-invalid @enderror"
-                           value="{{ old('first_name', $user->first_name) }}" required>
+                           value="{{ old('first_name', $meFN) }}" required>
                     @error('first_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-4">
@@ -44,40 +80,44 @@
                     </label>
                     <input type="text" name="middle_name" id="middleNameInput"
                            class="form-control @error('middle_name') is-invalid @enderror"
-                           value="{{ old('middle_name', $user->middle_name) }}">
+                           value="{{ old('middle_name', $meMN) }}">
                     @error('middle_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-semibold">Last Name</label>
+                    <label class="form-label fw-semibold">
+                        Last Name <span class="text-danger">*</span>
+                    </label>
                     <input type="text" name="last_name"
                            class="form-control @error('last_name') is-invalid @enderror"
-                           value="{{ old('last_name', $user->last_name) }}" required>
+                           value="{{ old('last_name', $meLN) }}" required>
                     @error('last_name')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-2">
                     <label class="form-label fw-semibold">M.I.</label>
-                    <input type="text" id="miDisplay" class="form-control bg-light" readonly
-                           value="{{ $user->middle_initial }}">
+                    <input type="text" id="miDisplay" class="form-control bg-light"
+                           readonly value="{{ $meMI }}">
                 </div>
                 <div class="col-md-4">
                     <label class="form-label fw-semibold">
-                        Birthdate <span class="text-muted small fw-normal">(mm/dd/yyyy)</span>
+                        Birthdate <span class="text-muted small fw-normal">(optional)</span>
                     </label>
                     <input type="date" name="birthdate" id="birthdateInput"
                            class="form-control @error('birthdate') is-invalid @enderror"
-                           value="{{ old('birthdate', $user->birthdate?->format('Y-m-d')) }}">
+                           value="{{ old('birthdate', $meBD instanceof \Carbon\Carbon ? $meBD->format('Y-m-d') : ($meBD ?? '')) }}">
                     @error('birthdate')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-2">
                     <label class="form-label fw-semibold">Age</label>
-                    <input type="text" id="ageDisplay" class="form-control bg-light" readonly
-                           value="{{ $user->age !== null ? $user->age . ' years old' : '' }}">
+                    <input type="text" id="ageDisplay" class="form-control bg-light"
+                           readonly value="{{ $meAge }}">
                 </div>
                 <div class="col-md-4">
-                    <label class="form-label fw-semibold">Contact #1</label>
+                    <label class="form-label fw-semibold">
+                        Contact #1 <span class="text-danger">*</span>
+                    </label>
                     <input type="text" name="contact_number_1"
                            class="form-control @error('contact_number_1') is-invalid @enderror"
-                           value="{{ old('contact_number_1', $user->contact_number_1) }}">
+                           value="{{ old('contact_number_1', $me->contact_number_1) }}" required>
                     @error('contact_number_1')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-4">
@@ -86,7 +126,7 @@
                     </label>
                     <input type="text" name="contact_number_2"
                            class="form-control @error('contact_number_2') is-invalid @enderror"
-                           value="{{ old('contact_number_2', $user->contact_number_2) }}">
+                           value="{{ old('contact_number_2', $me->contact_number_2) }}">
                     @error('contact_number_2')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
             </div>
@@ -99,17 +139,14 @@
                 @include('partials.address-fields', [
                     'fieldPrefix' => '',
                     'data' => [
-                        'region'        => old('region', $user->region ?? ''),
-                        'province'      => old('province', $user->province ?? ''),
-                        'city'          => old('city', $user->city ?? ''),
-                        'barangay'      => old('barangay', $user->barangay ?? ''),
-                        'house_unit_no' => old('house_unit_no', $user->house_unit_no ?? ''),
-                        'street'        => old('street', $user->street ?? ''),
-                        'zip_code'      => old('zip_code', $user->zip_code ?? ''),
+                        'region'        => old('region',        $me->region        ?? ''),
+                        'province'      => old('province',      $me->province      ?? ''),
+                        'city'          => old('city',          $me->city          ?? ''),
+                        'barangay'      => old('barangay',      $me->barangay      ?? ''),
+                        'house_unit_no' => old('house_unit_no', $me->house_unit_no ?? ''),
+                        'street'        => old('street',        $me->street        ?? ''),
+                        'zip_code'      => old('zip_code',      $me->zip_code      ?? ''),
                     ],
-                    'regions'   => $regions,
-                    'provinces' => $provinces,
-                    'cities'    => $cities,
                 ])
             </div>
 
@@ -119,22 +156,27 @@
             </p>
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">Email</label>
+                    <label class="form-label fw-semibold">
+                        Email <span class="text-danger">*</span>
+                    </label>
                     <input type="email" name="email"
                            class="form-control @error('email') is-invalid @enderror"
-                           value="{{ old('email', $user->email) }}" required>
+                           value="{{ old('email', $me->email) }}" required>
                     @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label fw-semibold">Username</label>
+                    <label class="form-label fw-semibold">
+                        Username <span class="text-danger">*</span>
+                    </label>
                     <input type="text" name="username"
                            class="form-control @error('username') is-invalid @enderror"
-                           value="{{ old('username', $user->username) }}" required>
+                           value="{{ old('username', $me->username) }}" required>
                     @error('username')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">
-                        New Password <span class="text-muted small fw-normal">(leave blank to keep)</span>
+                        New Password
+                        <span class="text-muted small fw-normal">(leave blank to keep current)</span>
                     </label>
                     <input type="password" name="password"
                            class="form-control @error('password') is-invalid @enderror">
@@ -153,68 +195,19 @@
     </div>
 </div>
 
-<div class="card border-danger">
-    <div class="card-header text-danger fw-semibold bg-white">
-        <i class="bi bi-exclamation-triangle me-1"></i>Danger Zone
-    </div>
-    <div class="card-body">
-        @if(Auth::user()->role->role_name !== 'directress')
-        <p class="text-muted small mb-3">
-            Deactivating your account will log you out immediately.
-            You will need an administrator to reactivate it.
-        </p>
-        <button type="button" class="btn btn-outline-danger btn-sm"
-                data-bs-toggle="modal" data-bs-target="#deactivateModal">
-            <i class="bi bi-person-x me-1"></i>Deactivate My Account
-        </button>
-        @else
-        <p class="text-muted small mb-0 fst-italic">
-            <i class="bi bi-lock me-1"></i>
-            The Directress account cannot be self-deactivated for security reasons.
-        </p>
-        @endif
-    </div>
-</div>
-
-@if(Auth::user()->role->role_name !== 'directress')
-<div class="modal fade" id="deactivateModal" tabindex="-1">
-    <div class="modal-dialog modal-sm">
-        <div class="modal-content">
-            <div class="modal-header border-0 pb-0">
-                <h6 class="modal-title text-danger fw-bold">Deactivate Account</h6>
-                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-            </div>
-            <div class="modal-body small text-muted">
-                Are you sure? You will be logged out immediately and will need an
-                administrator to reactivate your account.
-            </div>
-            <div class="modal-footer border-0 pt-0">
-                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
-                <form method="POST" action="{{ route('admin.profile.deactivate') }}" class="d-inline">
-                    @csrf @method('DELETE')
-                    <button class="btn btn-sm btn-danger">
-                        <i class="bi bi-person-x me-1"></i>Yes, Deactivate
-                    </button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
-@endif
-
 <script>
-document.getElementById('middleNameInput').addEventListener('input', function () {
-    const mi = this.value.trim();
+document.getElementById('middleNameInput').addEventListener('input', function() {
+    var mi = this.value.trim();
     document.getElementById('miDisplay').value = mi ? mi[0].toUpperCase() + '.' : '';
 });
 
-document.getElementById('birthdateInput').addEventListener('change', function () {
+document.getElementById('birthdateInput').addEventListener('change', function() {
     if (!this.value) { document.getElementById('ageDisplay').value = ''; return; }
-    const birth = new Date(this.value);
-    const today = new Date();
-    let age = today.getFullYear() - birth.getFullYear();
+    var birth = new Date(this.value);
+    var today = new Date();
+    var age   = today.getFullYear() - birth.getFullYear();
     if (today.getMonth() < birth.getMonth() ||
-       (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) age--;
+       (today.getMonth() === birth.getMonth() && today.getDate() < birth.getDate())) { age--; }
     document.getElementById('ageDisplay').value = age + ' years old';
 });
 </script>
