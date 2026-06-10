@@ -4,19 +4,39 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0">My Enrollments</h5>
+    {{-- Show top-right button only if enrollments exist AND there are still eligible students --}}
+    @if($enrollments->isNotEmpty() && $hasEligibleStudents)
     <a href="{{ route('portal.enrollments.create') }}" class="btn btn-primary btn-sm">
         <i class="bi bi-plus-circle me-1"></i>Submit New Enrollment
     </a>
+    @endif
 </div>
+
+@if(session('success'))
+<div class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle me-2"></i>{{ session('success') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
 
 @if($enrollments->isEmpty())
 <div class="card border-0 shadow-sm">
     <div class="card-body text-center py-5">
-        <i class="bi bi-clipboard-x text-muted" style="font-size:2.5rem;"></i>
-        <p class="text-muted mt-3">No enrollment records yet.</p>
+        <i class="bi bi-clipboard-x text-muted d-block mb-3" style="font-size:2.5rem;"></i>
+        <p class="fw-semibold mb-1">No enrollment records yet.</p>
+        @if($hasEligibleStudents)
+        <p class="text-muted small mb-4">
+            Submit an enrollment request for your child to get started.
+        </p>
         <a href="{{ route('portal.enrollments.create') }}" class="btn btn-primary btn-sm">
-            Submit Your First Enrollment
+            <i class="bi bi-plus-circle me-1"></i>Submit New Enrollment
         </a>
+        @else
+        <p class="text-muted small mb-0">
+            All linked students are already enrolled, or no active students are linked to your account.
+            Please contact the administrator for assistance.
+        </p>
+        @endif
     </div>
 </div>
 @else
@@ -31,7 +51,7 @@
                         <div class="text-muted small">{{ $enrollment->schoolYear?->year_label }}</div>
                     </div>
                     <span class="badge bg-{{ $enrollment->status_badge }}">
-                        {{ ucfirst($enrollment->status) }}
+                        {{ $enrollment->status_label }}
                     </span>
                 </div>
                 <table class="table table-sm mb-2">

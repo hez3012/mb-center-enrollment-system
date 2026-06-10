@@ -25,7 +25,24 @@ class EnrollmentController extends Controller
             ->orderByDesc('created_at')
             ->get();
 
-        return view('portal.enrollments.index', compact('enrollments'));
+        // Check if guardian has any students still eligible to enroll
+        $currentYear = SchoolYear::current();
+        $enrolledIds = [];
+        if ($currentYear) {
+            $enrolledIds = Enrollment::where('school_year_id', $currentYear->school_year_id)
+                ->whereNotIn('status', ['rejected', 'withdrawn'])
+                ->whereNull('deleted_at')
+                ->pluck('student_id')
+                ->toArray();
+        }
+
+        $hasEligibleStudents = $guardian
+            ? $guardian->students()->where('status', 'active')
+            ->whereNotIn('student_id', $enrolledIds)
+            ->exists()
+            : false;
+
+        return view('portal.enrollments.index', compact('enrollments', 'hasEligibleStudents'));
     }
 
     public function create()
@@ -45,6 +62,7 @@ class EnrollmentController extends Controller
         // Exclude students already enrolled this school year
         if ($currentYear) {
             $enrolledIds = Enrollment::where('school_year_id', $currentYear->school_year_id)
+                ->whereNotIn('status', ['rejected', 'withdrawn'])
                 ->whereNull('deleted_at')
                 ->pluck('student_id')
                 ->toArray();
@@ -52,7 +70,9 @@ class EnrollmentController extends Controller
         }
 
         return view('portal.enrollments.create', compact(
-            'students', 'currentYear', 'documentTypes'
+            'students',
+            'currentYear',
+            'documentTypes'
         ));
     }
 
@@ -79,6 +99,7 @@ class EnrollmentController extends Controller
         // Check duplicate enrollment
         $duplicate = Enrollment::where('student_id', $request->student_id)
             ->where('school_year_id', $request->school_year_id)
+            ->whereNotIn('status', ['rejected', 'withdrawn'])
             ->whereNull('deleted_at')
             ->exists();
 
@@ -114,7 +135,7 @@ class EnrollmentController extends Controller
             EnrollmentDocument::create([
                 'enrollment_id'    => $enrollment->enrollment_id,
                 'document_type_id' => $docType->document_type_id,
-                'submission_status'=> $submissionStatus,
+                'submission_status' => $submissionStatus,
                 'file_path'        => $filePath,
                 'submission_date'  => $filePath ? now()->toDateString() : null,
             ]);
@@ -139,7 +160,10 @@ class EnrollmentController extends Controller
         $studentIds = $guardian?->students->pluck('student_id')->toArray() ?? [];
 
         $enrollment = Enrollment::with([
-            'student', 'schoolYear', 'programLevel', 'documents.documentType'
+            'student',
+            'schoolYear',
+            'programLevel',
+            'documents.documentType'
         ])->findOrFail($id);
 
         if (!in_array($enrollment->student_id, $studentIds)) {

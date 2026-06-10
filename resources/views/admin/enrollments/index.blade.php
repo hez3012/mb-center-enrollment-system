@@ -11,7 +11,19 @@
     @endif
 </div>
 
-{{-- Search & Filter --}}
+@if(session('success'))
+<div class="alert alert-success alert-dismissible fade show">
+    <i class="bi bi-check-circle me-2"></i>{{ session('success') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
+@if(session('error'))
+<div class="alert alert-danger alert-dismissible fade show">
+    <i class="bi bi-exclamation-circle me-2"></i>{{ session('error') }}
+    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+</div>
+@endif
+
 <div class="card border-0 shadow-sm mb-3">
     <div class="card-body py-2">
         <div class="row g-2 align-items-center">
@@ -30,11 +42,13 @@
             <div class="col-md-2">
                 <select id="statusFilter" class="form-select form-select-sm">
                     <option value="">All Status</option>
-                    <option value="pending">Pending</option>
-                    <option value="approved">Approved</option>
+                    <option value="pending">Pending Review</option>
+                    <option value="pending_payment">Pending Payment</option>
+                    <option value="payment_confirmed">Payment Confirmed</option>
                     <option value="enrolled">Enrolled</option>
                     <option value="rejected">Rejected</option>
                     <option value="withdrawn">Withdrawn</option>
+                    <option value="completed">Completed</option>
                 </select>
             </div>
             <div class="col-md-2">
@@ -96,7 +110,7 @@
                     </td>
                     <td>
                         <span class="badge bg-{{ $enrollment->status_badge }}">
-                            {{ ucfirst($enrollment->status) }}
+                            {{ $enrollment->status_label }}
                         </span>
                     </td>
                     <td>{{ $enrollment->enrollment_date?->format('m/d/Y') ?? '—' }}</td>
@@ -123,19 +137,23 @@
                     </td>
                 </tr>
                 @empty
-                <tr>
-                    <td colspan="8" class="text-center text-muted py-3">No enrollments found.</td>
+                <tr id="noDataRow">
+                    <td colspan="8" class="text-center text-muted py-4">
+                        <i class="bi bi-clipboard-x d-block mb-2" style="font-size:1.5rem;"></i>
+                        No enrollments found.
+                    </td>
                 </tr>
                 @endforelse
             </tbody>
         </table>
-        <div id="noResults" class="text-center text-muted py-3" style="display:none;">
+
+        <div id="noResults" class="text-center text-muted py-4" style="display:none;">
+            <i class="bi bi-search d-block mb-2" style="font-size:1.5rem;"></i>
             No enrollments match your search.
         </div>
     </div>
 </div>
 
-{{-- Delete Modal --}}
 <div class="modal fade" id="deleteModal" tabindex="-1">
     <div class="modal-dialog modal-sm">
         <div class="modal-content">
@@ -170,25 +188,38 @@ var sortSelect   = document.getElementById('sortSelect');
 var tbody        = document.querySelector('#enrollmentsTable tbody');
 
 function applyFilters() {
-    var search = searchInput.value.toLowerCase().trim();
-    var year   = yearFilter.value;
-    var status = statusFilter.value;
-    var type   = typeFilter.value;
-    var sort   = sortSelect.value;
+    var search    = searchInput.value.toLowerCase().trim();
+    var year      = yearFilter.value;
+    var status    = statusFilter.value;
+    var type      = typeFilter.value;
+    var sort      = sortSelect.value;
+    var hasFilter = search !== '' || year !== '' || status !== '' || type !== '';
 
-    var rows = Array.from(tbody.querySelectorAll('tr[data-search]'));
+    var allRows      = Array.from(tbody.querySelectorAll('tr[data-search]'));
+    var noDataRow    = document.getElementById('noDataRow');
+    var noResultsDiv = document.getElementById('noResults');
 
-    rows.forEach(function(row) {
+    if (allRows.length === 0) {
+        noResultsDiv.style.display = 'none';
+        return;
+    }
+
+    if (noDataRow) {
+        noDataRow.style.display = 'none';
+    }
+
+    allRows.forEach(function(row) {
         var show = true;
         if (search && !(row.dataset.search || '').includes(search)) { show = false; }
-        if (year   && row.dataset.year   !== year)                  { show = false; }
-        if (status && row.dataset.status !== status)                { show = false; }
-        if (type   && row.dataset.type   !== type)                  { show = false; }
+        if (year   && row.dataset.year   !== year)                   { show = false; }
+        if (status && row.dataset.status !== status)                 { show = false; }
+        if (type   && row.dataset.type   !== type)                   { show = false; }
         row.style.display = show ? '' : 'none';
     });
 
-    var visible = rows.filter(function(r) { return r.style.display !== 'none'; });
-    document.getElementById('noResults').style.display = visible.length === 0 ? '' : 'none';
+    var visible = allRows.filter(function(r) { return r.style.display !== 'none'; });
+
+    noResultsDiv.style.display = (visible.length === 0 && hasFilter) ? '' : 'none';
 
     visible.sort(function(a, b) {
         if (sort === 'newest')  return (b.dataset.created || 0) - (a.dataset.created || 0);
@@ -217,6 +248,7 @@ function confirmDelete(id) {
 [searchInput, yearFilter, statusFilter, typeFilter, sortSelect].forEach(function(el) {
     el.addEventListener('input', applyFilters);
 });
+
 applyFilters();
 </script>
 @endsection

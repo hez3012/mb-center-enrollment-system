@@ -19,14 +19,19 @@ class EnrollmentController extends Controller
     public function index()
     {
         $enrollments = Enrollment::with([
-            'student', 'schoolYear', 'programLevel', 'processedBy'
+            'student',
+            'schoolYear',
+            'programLevel',
+            'processedBy'
         ])->orderByDesc('created_at')->get();
 
         $schoolYears   = SchoolYear::orderByDesc('start_date')->get();
         $programLevels = ProgramLevel::all();
 
         return view('admin.enrollments.index', compact(
-            'enrollments', 'schoolYears', 'programLevels'
+            'enrollments',
+            'schoolYears',
+            'programLevels'
         ));
     }
 
@@ -39,7 +44,11 @@ class EnrollmentController extends Controller
         $currentYear   = SchoolYear::current();
 
         return view('admin.enrollments.create', compact(
-            'students', 'schoolYears', 'programLevels', 'documentTypes', 'currentYear'
+            'students',
+            'schoolYears',
+            'programLevels',
+            'documentTypes',
+            'currentYear'
         ));
     }
 
@@ -61,6 +70,7 @@ class EnrollmentController extends Controller
         // Prevent duplicate enrollment for same student + school year
         $duplicate = Enrollment::where('student_id', $request->student_id)
             ->where('school_year_id', $request->school_year_id)
+            ->whereNotIn('status', ['rejected', 'withdrawn'])
             ->whereNull('deleted_at')
             ->exists();
 
@@ -94,7 +104,7 @@ class EnrollmentController extends Controller
                 EnrollmentDocument::create([
                     'enrollment_id'    => $enrollment->enrollment_id,
                     'document_type_id' => $docTypeId,
-                    'submission_status'=> $status ?? 'pending',
+                    'submission_status' => $status ?? 'pending',
                     'file_path'        => $filePath,
                     'submission_date'  => ($status === 'submitted') ? now()->toDateString() : null,
                     'notes'            => $request->input("doc_notes.{$docTypeId}"),
@@ -139,7 +149,10 @@ class EnrollmentController extends Controller
         $documentTypes = DocumentType::all();
 
         return view('admin.enrollments.edit', compact(
-            'enrollment', 'schoolYears', 'programLevels', 'documentTypes'
+            'enrollment',
+            'schoolYears',
+            'programLevels',
+            'documentTypes'
         ));
     }
 
