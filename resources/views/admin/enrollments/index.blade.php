@@ -102,9 +102,7 @@
                             'label' => 'Active Enrollments',
                             'icon'  => 'bi-clipboard-check',
                             'class' => 'table-success',
-                            'items' => $enrollments->filter(
-                                fn($e) => in_array($e->status, $editableStatuses)
-                            ),
+                            'items' => $enrollments->filter(fn($e) => in_array($e->status, $editableStatuses)),
                         ],
                         [
                             'key'   => 'completed',
@@ -180,7 +178,6 @@
                                            class="btn btn-sm btn-outline-info" title="View">
                                             <i class="bi bi-eye"></i>
                                         </a>
-                                        {{-- Edit only for active/editable statuses --}}
                                         @if(in_array($enrollment->status, $editableStatuses) && Auth::user()->hasPermission('edit_enrollment'))
                                             <a href="{{ route('admin.enrollments.edit', $enrollment->enrollment_id) }}"
                                                class="btn btn-sm btn-outline-primary" title="Edit">
@@ -248,6 +245,10 @@ var typeFilter   = document.getElementById('typeFilter');
 var sortSelect   = document.getElementById('sortSelect');
 var tbody        = document.querySelector('#enrollmentsTable tbody');
 
+Array.from(tbody.querySelectorAll('tr')).forEach(function(el, i) {
+    el.dataset.originalOrder = i;
+});
+
 function applyFilters() {
     var search    = searchInput.value.toLowerCase().trim();
     var year      = yearFilter.value;
@@ -262,6 +263,12 @@ function applyFilters() {
     var noResultsDiv    = document.getElementById('noResults');
 
     if (!hasFilter) {
+        Array.from(tbody.querySelectorAll('tr'))
+            .sort(function(a, b) {
+                return parseInt(a.dataset.originalOrder || 0) - parseInt(b.dataset.originalOrder || 0);
+            })
+            .forEach(function(el) { tbody.appendChild(el); });
+
         categoryHeaders.forEach(function(h) { h.style.display = ''; });
         categorySpacers.forEach(function(s) { s.style.display = ''; });
         dataRows.forEach(function(r) { r.style.display = ''; });

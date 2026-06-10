@@ -207,6 +207,10 @@ var disabilityFilter = document.getElementById('disabilityFilter');
 var statusFilter     = document.getElementById('statusFilter');
 var tbody            = document.querySelector('#studentsTable tbody');
 
+Array.from(tbody.querySelectorAll('tr')).forEach(function(el, i) {
+    el.dataset.originalOrder = i;
+});
+
 function applyFilters() {
     var search     = searchInput.value.toLowerCase().trim();
     var sort       = sortSelect.value;
@@ -221,6 +225,12 @@ function applyFilters() {
     var noResultsDiv    = document.getElementById('noResults');
 
     if (!hasFilter) {
+        Array.from(tbody.querySelectorAll('tr'))
+            .sort(function(a, b) {
+                return parseInt(a.dataset.originalOrder || 0) - parseInt(b.dataset.originalOrder || 0);
+            })
+            .forEach(function(el) { tbody.appendChild(el); });
+
         categoryHeaders.forEach(function(h) { h.style.display = ''; });
         categorySpacers.forEach(function(s) { s.style.display = ''; });
         dataRows.forEach(function(r) { r.style.display = ''; });
