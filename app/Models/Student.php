@@ -6,44 +6,45 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
- * @property int              $student_id
- * @property string           $first_name
- * @property string|null      $middle_name
- * @property string           $last_name
+ * @property int                 $student_id
+ * @property string              $first_name
+ * @property string|null         $middle_name
+ * @property string              $last_name
  * @property \Carbon\Carbon|null $birthdate
- * @property string           $sex
- * @property string|null      $sex_specify
- * @property string           $status
- * @property string|null      $region
- * @property string|null      $province
- * @property string|null      $city
- * @property string|null      $barangay
- * @property string|null      $house_unit_no
- * @property string|null      $street
- * @property string|null      $zip_code
- * @property string|null      $profile_picture
- * @property string|null      $dev_ped_document
- * @property int|null         $guardian_id
- * @property int|null         $program_level_id
- * @property int|null         $dev_ped_id
+ * @property string              $sex
+ * @property string|null         $sex_specify
+ * @property string              $status
+ * @property string|null         $region
+ * @property string|null         $province
+ * @property string|null         $city
+ * @property string|null         $barangay
+ * @property string|null         $house_unit_no
+ * @property string|null         $street
+ * @property string|null         $zip_code
+ * @property string|null         $profile_picture
+ * @property string|null         $dev_ped_document
+ * @property int|null            $guardian_id
+ * @property int|null            $program_level_id
+ * @property int|null            $dev_ped_id
  * @property \Carbon\Carbon|null $created_at
  * @property \Carbon\Carbon|null $updated_at
  * @property \Carbon\Carbon|null $deleted_at
- * @property-read string      $full_name
- * @property-read string      $list_name
- * @property-read string      $middle_initial
- * @property-read string      $full_address
- * @property-read int|null    $age
- * @property-read string      $sex_display
- * @property-read \App\Models\Guardian|null                $guardian
- * @property-read \App\Models\ProgramLevel|null            $programLevel
- * @property-read \App\Models\DevelopmentalPediatrician|null $devPed
- * @property-read \Illuminate\Database\Eloquent\Collection $disabilities
+ * @property-read string         $full_name
+ * @property-read string         $list_name
+ * @property-read string         $middle_initial
+ * @property-read string         $full_address
+ * @property-read int|null       $age
+ * @property-read string         $sex_display
+ * @property-read \App\Models\Guardian|null                    $guardian
+ * @property-read \App\Models\ProgramLevel|null                $programLevel
+ * @property-read \App\Models\DevelopmentalPediatrician|null   $devPed
+ * @property-read \Illuminate\Database\Eloquent\Collection     $disabilities
  */
 class Student extends Model
 {
     use SoftDeletes;
 
+    protected $table      = 'student';
     protected $primaryKey = 'student_id';
 
     protected $fillable = [
@@ -116,7 +117,11 @@ class Student extends Model
 
     public function getAgeAttribute(): ?int
     {
-        return $this->birthdate ? $this->birthdate->age : null;
+        $bd = $this->birthdate;
+        if ($bd === null) {
+            return null;
+        }
+        return $bd->age;
     }
 
     public function getSexDisplayAttribute(): string
