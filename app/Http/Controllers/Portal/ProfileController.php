@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Models\User;
 
@@ -21,15 +22,15 @@ class ProfileController extends Controller
         $user = User::findOrFail(Auth::id());
 
         $request->validate([
-            'first_name'       => 'required|string|max:100',
+            'first_name'       => 'required|string|min:2|max:100',
             'middle_name'      => 'nullable|string|max:100',
-            'last_name'        => 'required|string|max:100',
-            'contact_number_1' => 'required|string|max:20',
-            'contact_number_2' => 'nullable|string|max:20',
+            'last_name'        => 'required|string|min:2|max:100',
+            'contact_number_1' => ['required','regex:/^09\d{9}$/'],
+            'contact_number_2' => ['nullable','regex:/^09\d{9}$/'],
             'email'            => 'required|email|unique:users,email,'.$user->user_id.',user_id',
             'username'         => 'required|string|min:4|max:50|unique:users,username,'.$user->user_id.',user_id',
-            'password'         => 'nullable|string|min:8|confirmed',
-            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'password'         => 'nullable|string|min:6|confirmed',
+            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:51200',
         ]);
 
         $picturePath = $user->profile_picture;
@@ -55,6 +56,8 @@ class ProfileController extends Controller
         }
 
         $user->update($data);
+
+        Log::info('Portal profile updated', ['user_id' => $user->user_id]);
 
         return back()->with('success','Profile updated successfully.');
     }

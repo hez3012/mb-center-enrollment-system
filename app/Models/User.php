@@ -11,6 +11,8 @@ use Illuminate\Notifications\Notifiable;
  * @property string              $first_name
  * @property string|null         $middle_name
  * @property string              $last_name
+ * @property string|null         $sex
+ * @property string|null         $sex_specify
  * @property \Carbon\Carbon|null $birthdate
  * @property string|null         $contact_number_1
  * @property string|null         $contact_number_2
@@ -34,6 +36,7 @@ use Illuminate\Notifications\Notifiable;
  * @property-read string         $list_name
  * @property-read string         $middle_initial
  * @property-read string         $full_address
+ * @property-read string         $sex_display
  * @property-read int|null       $age
  * @property-read \App\Models\Role|null                    $role
  * @property-read \Illuminate\Database\Eloquent\Collection $permissions
@@ -49,6 +52,8 @@ class User extends Authenticatable
         'first_name',
         'middle_name',
         'last_name',
+        'sex',
+        'sex_specify',
         'birthdate',
         'contact_number_1',
         'contact_number_2',
@@ -127,6 +132,17 @@ class User extends Authenticatable
             return null;
         }
         return $bd->age;
+    }
+
+    public function getSexDisplayAttribute(): string
+    {
+        return match($this->sex) {
+            'male'              => 'Male',
+            'female'            => 'Female',
+            'prefer_not_to_say' => 'Prefer not to say',
+            'others'            => $this->sex_specify ?: 'Others',
+            default             => '—',
+        };
     }
 
     // -------------------------------------------------------------------------

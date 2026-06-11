@@ -12,13 +12,11 @@
     $selStreet    = $data['street']        ?? '';
     $selZip       = $data['zip_code']      ?? '';
 
-    $geo        = new PhilippinesGeo();
-    $allRegions = $geo->getRegions();
-
+    $geo           = new PhilippinesGeo();
+    $allRegions    = $geo->getRegions();
     $initProvinces = $selRegion   ? $geo->getProvinces($selRegion)   : [];
     $initCities    = $selProvince ? $geo->getCities($selProvince)    : [];
 
-    // Build full structure for JS cascade
     $geoJson = [];
     foreach ($allRegions as $rgn) {
         $provs = $geo->getProvinces($rgn);
@@ -42,8 +40,7 @@
         </label>
         <select name="{{ $fieldPrefix }}region"
                 id="{{ $uid }}_region"
-                class="form-select"
-                required>
+                class="form-select" required>
             <option value="">-- Select Region --</option>
             @foreach($allRegions as $rgn)
                 <option value="{{ $rgn }}"
@@ -60,8 +57,7 @@
         </label>
         <select name="{{ $fieldPrefix }}province"
                 id="{{ $uid }}_province"
-                class="form-select"
-                required>
+                class="form-select" required>
             <option value="">-- Select Province --</option>
             @foreach($initProvinces as $prov)
                 <option value="{{ $prov }}"
@@ -78,8 +74,7 @@
         </label>
         <select name="{{ $fieldPrefix }}city"
                 id="{{ $uid }}_city"
-                class="form-select"
-                required>
+                class="form-select" required>
             <option value="">-- Select City / Municipality --</option>
             @foreach($initCities as $cty)
                 <option value="{{ $cty }}"
@@ -98,7 +93,6 @@
                name="{{ $fieldPrefix }}barangay"
                class="form-control"
                value="{{ $selBarangay }}"
-               placeholder="e.g. Central Signal Village"
                required>
     </div>
 
@@ -110,7 +104,6 @@
                name="{{ $fieldPrefix }}house_unit_no"
                class="form-control"
                value="{{ $selHouseUnit }}"
-               placeholder="e.g. 8"
                required>
     </div>
 
@@ -122,7 +115,6 @@
                name="{{ $fieldPrefix }}street"
                class="form-control"
                value="{{ $selStreet }}"
-               placeholder="e.g. Rongo St."
                required>
     </div>
 
@@ -134,7 +126,6 @@
                name="{{ $fieldPrefix }}zip_code"
                class="form-control"
                value="{{ $selZip }}"
-               placeholder="e.g. 1630"
                required>
     </div>
 </div>
@@ -150,14 +141,12 @@
     function fillSelect(el, items, selected) {
         var placeholder = el.options[0].text;
         el.innerHTML = '';
-        var blank      = document.createElement('option');
-        blank.value    = '';
-        blank.text     = placeholder;
+        var blank   = document.createElement('option');
+        blank.value = ''; blank.text = placeholder;
         el.appendChild(blank);
         items.forEach(function (item) {
-            var opt      = document.createElement('option');
-            opt.value    = item;
-            opt.text     = item;
+            var opt = document.createElement('option');
+            opt.value = item; opt.text = item;
             opt.selected = (item === selected);
             el.appendChild(opt);
         });

@@ -14,6 +14,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  * @property string              $sex
  * @property string|null         $sex_specify
  * @property string              $status
+ * @property string|null         $disability_other
  * @property string|null         $region
  * @property string|null         $province
  * @property string|null         $city
@@ -56,6 +57,7 @@ class Student extends Model
         'sex_specify',
         'status',
         'profile_picture',
+        'disability_other',
         'dev_ped_document',
         'region',
         'province',
@@ -129,8 +131,8 @@ class Student extends Model
         return match($this->sex) {
             'male'              => 'Male',
             'female'            => 'Female',
-            'others'            => $this->sex_specify ?: 'Others',
             'prefer_not_to_say' => 'Prefer not to say',
+            'others'            => $this->sex_specify ?: 'Others',
             default             => ucfirst((string) ($this->sex ?? '')),
         };
     }

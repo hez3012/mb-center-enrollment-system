@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Models\Student;
 use App\Models\Guardian;
@@ -18,6 +19,7 @@ class StudentController extends Controller
 {
     public function index()
     {
+        Log::info('Student Management: index accessed', ['by' => Auth::user()->username]);
         $students      = Student::with(['guardian.user','programLevel','disabilities'])
             ->whereNull('deleted_at')->get();
         $programLevels = ProgramLevel::all();
@@ -48,9 +50,9 @@ class StudentController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'first_name'       => 'required|string|max:100',
+            'first_name'       => 'required|string|min:2|max:100',
             'middle_name'      => 'nullable|string|max:100',
-            'last_name'        => 'required|string|max:100',
+            'last_name'        => 'required|string|min:2|max:100',
             'birthdate'        => 'required|date',
             'sex'              => 'required|in:male,female,others,prefer_not_to_say',
             'sex_specify'      => 'nullable|string|max:100',
@@ -62,12 +64,13 @@ class StudentController extends Controller
             'region'           => 'required|string|max:100',
             'province'         => 'required|string|max:100',
             'city'             => 'required|string|max:100',
-            'barangay'         => 'required|string|max:100',
-            'house_unit_no'    => 'required|string|max:100',
-            'street'           => 'required|string|max:100',
-            'zip_code'         => 'required|string|max:10',
-            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-            'disabilities'     => 'nullable|array',
+            'barangay'         => 'required|string|min:4|max:100',
+            'house_unit_no'    => 'required|string|min:1|max:100',
+            'street'           => 'required|string|min:4|max:100',
+            'zip_code'         => ['required','regex:/^\d{4}$/'],
+            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:51200',
+            'disabilities'     => 'required|array|min:1',
+            'disability_other' => 'nullable|string|max:255',
         ]);
 
         $picturePath = null;
@@ -82,9 +85,11 @@ class StudentController extends Controller
             'last_name'        => $request->last_name,
             'birthdate'        => $request->birthdate,
             'sex'              => $request->sex,
-            'sex_specify'      => $request->sex_specify,
+            'sex_specify'      => $request->sex === 'others' ? $request->sex_specify : null,
             'status'           => $request->status,
             'profile_picture'  => $picturePath,
+            'disability_other' => $request->disability_other,
+            'dev_ped_document' => $request->dev_ped_document,
             'region'           => $request->region,
             'province'         => $request->province,
             'city'             => $request->city,
@@ -95,12 +100,9 @@ class StudentController extends Controller
             'guardian_id'      => $request->guardian_id,
             'program_level_id' => $request->program_level_id,
             'dev_ped_id'       => $request->dev_ped_id,
-            'dev_ped_document' => $request->dev_ped_document,
         ]);
 
-        if ($request->filled('disabilities')) {
-            $student->disabilities()->sync($request->disabilities);
-        }
+        $student->disabilities()->sync($request->disabilities ?? []);
 
         AuditLog::create([
             'user_id'    => Auth::user()->user_id,
@@ -110,12 +112,23 @@ class StudentController extends Controller
             'changes'    => json_encode(['name' => $student->full_name]),
         ]);
 
+        Log::info('Student created', [
+            'by'         => Auth::user()->username,
+            'student_id' => $student->student_id,
+            'name'       => $student->full_name,
+        ]);
+
         return redirect()->route('admin.students.index')
             ->with('success','Student created successfully.');
     }
 
     public function show(string $id)
     {
+        Log::info('Student Management: viewing student', [
+            'by'         => Auth::user()->username,
+            'student_id' => $id,
+        ]);
+
         $student = Student::with(['guardian.user','programLevel','disabilities','devPed'])
             ->findOrFail($id);
 
@@ -147,9 +160,9 @@ class StudentController extends Controller
         $student = Student::findOrFail($id);
 
         $request->validate([
-            'first_name'       => 'required|string|max:100',
+            'first_name'       => 'required|string|min:2|max:100',
             'middle_name'      => 'nullable|string|max:100',
-            'last_name'        => 'required|string|max:100',
+            'last_name'        => 'required|string|min:2|max:100',
             'birthdate'        => 'required|date',
             'sex'              => 'required|in:male,female,others,prefer_not_to_say',
             'sex_specify'      => 'nullable|string|max:100',
@@ -161,12 +174,13 @@ class StudentController extends Controller
             'region'           => 'required|string|max:100',
             'province'         => 'required|string|max:100',
             'city'             => 'required|string|max:100',
-            'barangay'         => 'required|string|max:100',
-            'house_unit_no'    => 'required|string|max:100',
-            'street'           => 'required|string|max:100',
-            'zip_code'         => 'required|string|max:10',
-            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
-            'disabilities'     => 'nullable|array',
+            'barangay'         => 'required|string|min:4|max:100',
+            'house_unit_no'    => 'required|string|min:1|max:100',
+            'street'           => 'required|string|min:4|max:100',
+            'zip_code'         => ['required','regex:/^\d{4}$/'],
+            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:51200',
+            'disabilities'     => 'required|array|min:1',
+            'disability_other' => 'nullable|string|max:255',
         ]);
 
         $picturePath = $student->profile_picture;
@@ -182,9 +196,11 @@ class StudentController extends Controller
             'last_name'        => $request->last_name,
             'birthdate'        => $request->birthdate,
             'sex'              => $request->sex,
-            'sex_specify'      => $request->sex_specify,
+            'sex_specify'      => $request->sex === 'others' ? $request->sex_specify : null,
             'status'           => $request->status,
             'profile_picture'  => $picturePath,
+            'disability_other' => $request->disability_other,
+            'dev_ped_document' => $request->dev_ped_document,
             'region'           => $request->region,
             'province'         => $request->province,
             'city'             => $request->city,
@@ -195,7 +211,6 @@ class StudentController extends Controller
             'guardian_id'      => $request->guardian_id,
             'program_level_id' => $request->program_level_id,
             'dev_ped_id'       => $request->dev_ped_id,
-            'dev_ped_document' => $request->dev_ped_document,
         ]);
 
         $student->disabilities()->sync($request->input('disabilities',[]));
@@ -206,6 +221,11 @@ class StudentController extends Controller
             'table_name' => 'student',
             'record_id'  => $student->student_id,
             'changes'    => json_encode(['name' => $student->full_name]),
+        ]);
+
+        Log::info('Student updated', [
+            'by'         => Auth::user()->username,
+            'student_id' => $student->student_id,
         ]);
 
         return redirect()->route('admin.students.index')
@@ -223,6 +243,11 @@ class StudentController extends Controller
             'table_name' => 'student',
             'record_id'  => $id,
             'changes'    => json_encode(['deleted' => $id]),
+        ]);
+
+        Log::info('Student deleted', [
+            'by'         => Auth::user()->username,
+            'student_id' => $id,
         ]);
 
         return redirect()->route('admin.students.index')

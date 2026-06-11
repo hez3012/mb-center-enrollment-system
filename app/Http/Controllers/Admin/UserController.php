@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use App\Models\User;
 use App\Models\Role;
@@ -19,6 +20,7 @@ class UserController extends Controller
 {
     public function index()
     {
+        Log::info('User Management: index accessed', ['by' => Auth::user()->username]);
         $users = User::with('role')->whereNull('deleted_at')->get();
         return view('admin.users.index', compact('users'));
     }
@@ -38,7 +40,7 @@ class UserController extends Controller
         $allowedRoles  = Role::whereIn('role_name', $allowedRoleNames)->get();
         $permissions   = Permission::orderBy('category')->orderBy('permission_name')->get();
 
-        $rolePermsRaw  = DB::table('role_permissions')
+        $rolePermsRaw = DB::table('role_permissions')
             ->join('roles','role_permissions.role_id','=','roles.role_id')
             ->select('roles.role_id','role_permissions.permission_id')
             ->get();
@@ -48,6 +50,10 @@ class UserController extends Controller
             $rolePermissions[$rp->role_id][] = $rp->permission_id;
         }
 
+        // view_audit_log permission ID (for auto-check)
+        $viewAuditLogId = Permission::where('permission_name','view_audit_log')
+            ->value('permission_id');
+
         $geo       = new PhilippinesGeo();
         $regions   = $geo->getRegions();
         $provinces = $geo->getProvinces('');
@@ -55,7 +61,8 @@ class UserController extends Controller
 
         return view('admin.users.create', compact(
             'allowedRoles','permissions','rolePermissions',
-            'preselectedRole','regions','provinces','cities'
+            'preselectedRole','regions','provinces','cities',
+            'viewAuditLogId'
         ));
     }
 
@@ -63,23 +70,25 @@ class UserController extends Controller
     {
         $request->validate([
             'role_id'          => 'required|exists:roles,role_id',
-            'first_name'       => 'required|string|max:100',
+            'first_name'       => 'required|string|min:2|max:100',
             'middle_name'      => 'nullable|string|max:100',
-            'last_name'        => 'required|string|max:100',
+            'last_name'        => 'required|string|min:2|max:100',
+            'sex'              => 'required|in:male,female,prefer_not_to_say,others',
+            'sex_specify'      => 'nullable|string|max:100',
             'birthdate'        => 'nullable|date',
-            'contact_number_1' => 'required|string|max:20',
-            'contact_number_2' => 'nullable|string|max:20',
+            'contact_number_1' => ['required','regex:/^09\d{9}$/'],
+            'contact_number_2' => ['nullable','regex:/^09\d{9}$/'],
             'region'           => 'required|string|max:100',
             'province'         => 'required|string|max:100',
             'city'             => 'required|string|max:100',
-            'barangay'         => 'required|string|max:100',
-            'house_unit_no'    => 'required|string|max:100',
-            'street'           => 'required|string|max:100',
-            'zip_code'         => 'required|string|max:10',
+            'barangay'         => 'required|string|min:4|max:100',
+            'house_unit_no'    => 'required|string|min:1|max:100',
+            'street'           => 'required|string|min:4|max:100',
+            'zip_code'         => ['required','regex:/^\d{4}$/'],
             'email'            => 'required|email|unique:users,email',
             'username'         => 'required|string|min:4|max:50|unique:users,username',
-            'password'         => 'required|string|min:8|confirmed',
-            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'password'         => 'required|string|min:6|confirmed',
+            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:51200',
             'permissions'      => 'nullable|array',
         ]);
 
@@ -99,6 +108,8 @@ class UserController extends Controller
             'first_name'       => $request->first_name,
             'middle_name'      => $request->middle_name,
             'last_name'        => $request->last_name,
+            'sex'              => $request->sex,
+            'sex_specify'      => $request->sex === 'others' ? $request->sex_specify : null,
             'birthdate'        => $request->birthdate,
             'contact_number_1' => $request->contact_number_1,
             'contact_number_2' => $request->contact_number_2,
@@ -148,6 +159,12 @@ class UserController extends Controller
             'changes'    => json_encode(['username' => $user->username, 'role' => $role?->role_name]),
         ]);
 
+        Log::info('User created', [
+            'by'       => Auth::user()->username,
+            'new_user' => $user->username,
+            'role'     => $role?->role_name,
+        ]);
+
         if ($role && $role->role_name === 'guardian') {
             return redirect()->route('admin.guardians.index')
                 ->with('success','Guardian account created successfully.');
@@ -159,8 +176,15 @@ class UserController extends Controller
 
     public function show(string $id)
     {
-        $user = User::with(['role','permissions','guardian'])->findOrFail($id);
-        return view('admin.users.show', compact('user'));
+        $user           = User::with(['role','permissions','guardian'])->findOrFail($id);
+        $allPermissions = Permission::orderBy('category')->orderBy('permission_name')->get();
+
+        Log::info('User Management: viewing user', [
+            'by'      => Auth::user()->username,
+            'user_id' => $id,
+        ]);
+
+        return view('admin.users.show', compact('user','allPermissions'));
     }
 
     public function edit(string $id)
@@ -195,6 +219,9 @@ class UserController extends Controller
             $rolePermissions[$rp->role_id][] = $rp->permission_id;
         }
 
+        $viewAuditLogId = Permission::where('permission_name','view_audit_log')
+            ->value('permission_id');
+
         $geo       = new PhilippinesGeo();
         $regions   = $geo->getRegions();
         $provinces = $geo->getProvinces($user->region ?? '');
@@ -202,7 +229,8 @@ class UserController extends Controller
 
         return view('admin.users.edit', compact(
             'user','userRoleName','allowedRoles','permissions',
-            'rolePermissions','regions','provinces','cities'
+            'rolePermissions','regions','provinces','cities',
+            'viewAuditLogId'
         ));
     }
 
@@ -211,23 +239,25 @@ class UserController extends Controller
         $user = User::findOrFail($id);
 
         $request->validate([
-            'first_name'       => 'required|string|max:100',
+            'first_name'       => 'required|string|min:2|max:100',
             'middle_name'      => 'nullable|string|max:100',
-            'last_name'        => 'required|string|max:100',
+            'last_name'        => 'required|string|min:2|max:100',
+            'sex'              => 'required|in:male,female,prefer_not_to_say,others',
+            'sex_specify'      => 'nullable|string|max:100',
             'birthdate'        => 'nullable|date',
-            'contact_number_1' => 'required|string|max:20',
-            'contact_number_2' => 'nullable|string|max:20',
+            'contact_number_1' => ['required','regex:/^09\d{9}$/'],
+            'contact_number_2' => ['nullable','regex:/^09\d{9}$/'],
             'region'           => 'required|string|max:100',
             'province'         => 'required|string|max:100',
             'city'             => 'required|string|max:100',
-            'barangay'         => 'required|string|max:100',
-            'house_unit_no'    => 'required|string|max:100',
-            'street'           => 'required|string|max:100',
-            'zip_code'         => 'required|string|max:10',
+            'barangay'         => 'required|string|min:4|max:100',
+            'house_unit_no'    => 'required|string|min:1|max:100',
+            'street'           => 'required|string|min:4|max:100',
+            'zip_code'         => ['required','regex:/^\d{4}$/'],
             'email'            => 'required|email|unique:users,email,'.$user->user_id.',user_id',
             'username'         => 'required|string|min:4|max:50|unique:users,username,'.$user->user_id.',user_id',
-            'password'         => 'nullable|string|min:8|confirmed',
-            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:2048',
+            'password'         => 'nullable|string|min:6|confirmed',
+            'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:51200',
             'permissions'      => 'nullable|array',
         ]);
 
@@ -247,6 +277,8 @@ class UserController extends Controller
             'first_name'       => $request->first_name,
             'middle_name'      => $request->middle_name,
             'last_name'        => $request->last_name,
+            'sex'              => $request->sex,
+            'sex_specify'      => $request->sex === 'others' ? $request->sex_specify : null,
             'birthdate'        => $request->birthdate,
             'contact_number_1' => $request->contact_number_1,
             'contact_number_2' => $request->contact_number_2,
@@ -290,6 +322,11 @@ class UserController extends Controller
             'changes'    => json_encode(['updated' => $user->username]),
         ]);
 
+        Log::info('User updated', [
+            'by'      => Auth::user()->username,
+            'user_id' => $user->user_id,
+        ]);
+
         return redirect()->route('admin.users.index')
             ->with('success','User updated successfully.');
     }
@@ -307,6 +344,12 @@ class UserController extends Controller
             'changes'    => json_encode(['is_active' => $user->is_active]),
         ]);
 
+        Log::info('User toggled', [
+            'by'        => Auth::user()->username,
+            'user_id'   => $user->user_id,
+            'is_active' => $user->is_active,
+        ]);
+
         return back()->with('success','User status updated.');
     }
 
@@ -321,6 +364,12 @@ class UserController extends Controller
             'table_name' => 'users',
             'record_id'  => $id,
             'changes'    => json_encode(['deleted' => $user->username]),
+        ]);
+
+        Log::info('User deleted', [
+            'by'       => Auth::user()->username,
+            'user_id'  => $id,
+            'username' => $user->username,
         ]);
 
         return redirect()->route('admin.users.index')

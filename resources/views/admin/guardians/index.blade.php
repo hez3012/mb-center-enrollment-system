@@ -102,7 +102,7 @@
                         </td>
                     </tr>
                 @empty
-                    <tr>
+                    <tr id="noDataRow">
                         <td colspan="8" class="text-center text-muted py-4">
                             <i class="bi bi-person-heart d-block mb-2" style="font-size:1.5rem;"></i>
                             No guardians found.
@@ -123,40 +123,48 @@ var searchInput  = document.getElementById('searchInput');
 var sortSelect   = document.getElementById('sortSelect');
 var statusFilter = document.getElementById('statusFilter');
 var tbody        = document.querySelector('#guardiansTable tbody');
+var hasGuardians = tbody.querySelectorAll('tr[data-search]').length > 0;
 
-function applyFilters(){
+function applyFilters() {
+    if (!hasGuardians) {
+        document.getElementById('noResults').style.display = 'none';
+        return;
+    }
+
     var search = searchInput.value.toLowerCase().trim();
     var sort   = sortSelect.value;
     var status = statusFilter.value;
 
     var rows = Array.from(tbody.querySelectorAll('tr[data-search]'));
 
-    rows.forEach(function(row){
-        var show=true;
-        if(search&&!(row.dataset.search||'').includes(search)){show=false;}
-        if(status&&row.dataset.status!==status){show=false;}
-        row.style.display=show?'':'none';
+    rows.forEach(function(row) {
+        var show = true;
+        if (search && !(row.dataset.search || '').includes(search)) { show = false; }
+        if (status && row.dataset.status !== status)                 { show = false; }
+        row.style.display = show ? '' : 'none';
     });
 
-    var visible=rows.filter(function(r){return r.style.display!=='none';});
-    document.getElementById('noResults').style.display=(visible.length===0)?'':'none';
+    var visible = rows.filter(function(r) { return r.style.display !== 'none'; });
+    document.getElementById('noResults').style.display = (visible.length === 0) ? '' : 'none';
 
-    visible.sort(function(a,b){
-        if(sort==='az') return (a.dataset.name||'').localeCompare(b.dataset.name||'');
-        if(sort==='za') return (b.dataset.name||'').localeCompare(a.dataset.name||'');
-        if(sort==='created') return (b.dataset.created||0)-(a.dataset.created||0);
+    visible.sort(function(a, b) {
+        if (sort === 'az')      return (a.dataset.name || '').localeCompare(b.dataset.name || '');
+        if (sort === 'za')      return (b.dataset.name || '').localeCompare(a.dataset.name || '');
+        if (sort === 'created') return (b.dataset.created || 0) - (a.dataset.created || 0);
         return 0;
     });
-    visible.forEach(function(r){tbody.appendChild(r);});
+    visible.forEach(function(r) { tbody.appendChild(r); });
 }
 
-function clearFilters(){
-    searchInput.value=''; sortSelect.value='az'; statusFilter.value='';
+function clearFilters() {
+    searchInput.value = '';
+    sortSelect.value  = 'az';
+    statusFilter.value = '';
     applyFilters();
 }
 
-[searchInput,sortSelect,statusFilter].forEach(function(el){
-    el.addEventListener('input',applyFilters);
+[searchInput, sortSelect, statusFilter].forEach(function(el) {
+    el.addEventListener('input', applyFilters);
 });
 
 applyFilters();
