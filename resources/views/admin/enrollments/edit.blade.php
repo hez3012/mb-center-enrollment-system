@@ -70,7 +70,12 @@
                 </div>
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Status</label>
-                    @if($enrollment->status === 'pending')
+
+                    {{--
+                        Restriction only applies to ONLINE enrollments in pending status.
+                        Walk-in enrollments can freely change status at any time.
+                    --}}
+                    @if($enrollment->status === 'pending' && $enrollment->enrollment_type === 'online')
                         <input type="hidden" name="status" value="pending">
                         <input type="text" class="form-control bg-light" readonly
                                value="Pending Review">
@@ -82,7 +87,15 @@
                         <select name="status"
                                 class="form-select @error('status') is-invalid @enderror"
                                 required>
-                            @foreach(['pending'=>'Pending Review','pending_payment'=>'Pending Payment','payment_confirmed'=>'Payment Confirmed','enrolled'=>'Enrolled','rejected'=>'Rejected','withdrawn'=>'Withdrawn','completed'=>'Completed'] as $val => $label)
+                            @foreach([
+                                'pending'           => 'Pending Review',
+                                'pending_payment'   => 'Pending Payment',
+                                'payment_confirmed' => 'Payment Confirmed',
+                                'enrolled'          => 'Enrolled',
+                                'rejected'          => 'Rejected',
+                                'withdrawn'         => 'Withdrawn',
+                                'completed'         => 'Completed',
+                            ] as $val => $label)
                                 <option value="{{ $val }}"
                                         {{ old('status', $enrollment->status) === $val ? 'selected' : '' }}>
                                     {{ $label }}

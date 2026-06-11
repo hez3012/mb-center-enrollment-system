@@ -37,11 +37,25 @@ class EnrollmentController extends Controller
 
     public function create()
     {
-        $students      = Student::with('programLevel')->where('status', 'active')->get();
+        $currentYear = SchoolYear::current();
+
+        // Exclude students who already have any enrollment in the current school year
+        $enrolledIds = [];
+        if ($currentYear) {
+            $enrolledIds = Enrollment::where('school_year_id', $currentYear->school_year_id)
+                ->whereNull('deleted_at')
+                ->pluck('student_id')
+                ->toArray();
+        }
+
+        $students      = Student::with('programLevel')
+            ->where('status', 'active')
+            ->whereNotIn('student_id', $enrolledIds)
+            ->get();
+
         $schoolYears   = SchoolYear::orderByDesc('start_date')->get();
         $programLevels = ProgramLevel::all();
         $documentTypes = DocumentType::all();
-        $currentYear   = SchoolYear::current();
 
         return view('admin.enrollments.create', compact(
             'students',

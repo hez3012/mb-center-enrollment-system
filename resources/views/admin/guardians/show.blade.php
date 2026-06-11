@@ -35,9 +35,11 @@
 
     {{-- Right Panel --}}
     <div class="col-md-8">
+
+        {{-- changed title from "Personal Information" to "Guardian Information" --}}
         <div class="card border-0 shadow-sm mb-3">
             <div class="card-header bg-white fw-semibold">
-                <i class="bi bi-person me-1"></i>Personal Information
+                <i class="bi bi-person-heart me-1"></i>Guardian Information
             </div>
             <div class="card-body">
                 @php $u = $guardian->user; $na = 'N/A'; @endphp
@@ -123,7 +125,8 @@
                                         </span>
                                     </td>
                                     <td>
-                                        <a href="{{ route('admin.students.show',$student->student_id) }}"
+                                        {{-- pass from_guardian so Back button returns here --}}
+                                        <a href="{{ route('admin.students.show', $student->student_id) }}?from_guardian={{ $guardian->guardian_id }}"
                                            class="btn btn-sm btn-outline-info">
                                             <i class="bi bi-eye"></i>
                                         </a>

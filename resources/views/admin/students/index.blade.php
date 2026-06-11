@@ -108,26 +108,46 @@
                             </td>
                         </tr>
                         @foreach($group['students'] as $student)
-                            @php $sc=['active'=>'success','inactive'=>'secondary','withdrawn'=>'warning','completed'=>'primary']; @endphp
+                            @php
+                                $sc = [
+                                    'active'    => 'success',
+                                    'inactive'  => 'secondary',
+                                    'withdrawn' => 'warning',
+                                    'completed' => 'primary',
+                                ];
+                                
+                                $isLocked = in_array($student->student_id, $lockedStudentIds ?? []);
+
+                                $guardianName = optional($student->guardian?->user)->full_name ?? '—';
+                            @endphp
                             <tr data-name="{{ strtolower($student->last_name) }}"
                                 data-created="{{ $student->created_at?->timestamp ?? 0 }}"
                                 data-modified="{{ $student->updated_at?->timestamp ?? 0 }}"
                                 data-program="{{ $student->program_level_id }}"
                                 data-status="{{ $student->status }}"
                                 data-disabilities="{{ $student->disabilities->pluck('disability_id')->implode(',') }}"
-                                data-search="{{ strtolower($student->list_name.' '.optional($student->guardian)->full_name) }}">
+                                data-search="{{ strtolower($student->list_name . ' ' . $guardianName) }}">
                                 <td>{{ $student->student_id }}</td>
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
-                                        @include('partials.avatar',['name'=>$student->list_name,'image'=>$student->profile_picture,'size'=>32])
+                                        @include('partials.avatar',[
+                                            'name'  => $student->list_name,
+                                            'image' => $student->profile_picture,
+                                            'size'  => 32,
+                                        ])
                                         <span>{{ $student->list_name }}</span>
                                     </div>
                                 </td>
-                                <td>{{ optional($student->guardian)->full_name ?? '—' }}</td>
+
+                                {{-- Concern 1 fix --}}
+                                <td>{{ $guardianName }}</td>
+
                                 <td>{{ optional($student->programLevel)->program_name ?? '—' }}</td>
                                 <td>
                                     @foreach($student->disabilities as $d)
-                                        <span class="badge bg-info text-dark">{{ $d->disability_name }}</span>
+                                        <span class="badge bg-info text-dark">
+                                            {{ $d->disability_name }}
+                                        </span>
                                     @endforeach
                                 </td>
                                 <td>
@@ -136,19 +156,29 @@
                                     </span>
                                 </td>
                                 <td>
-                                    <div class="d-flex gap-1">
+                                    <div class="d-flex align-items-center gap-1">
                                         @if(Auth::user()->hasPermission('view_student'))
                                             <a href="{{ route('admin.students.show',$student->student_id) }}"
                                                class="btn btn-sm btn-outline-info" title="View">
                                                 <i class="bi bi-eye"></i>
                                             </a>
                                         @endif
+
                                         @if(Auth::user()->hasPermission('edit_student'))
-                                            <a href="{{ route('admin.students.edit',$student->student_id) }}"
-                                               class="btn btn-sm btn-outline-primary" title="Edit">
-                                                <i class="bi bi-pencil"></i>
-                                            </a>
+                                            @if($isLocked)
+                                                {{-- Concern 2: locked — pending digital enrollment --}}
+                                                <span class="btn btn-sm btn-outline-secondary disabled"
+                                                      title="Cannot edit — digital enrollment pending review">
+                                                    <i class="bi bi-lock-fill"></i>
+                                                </span>
+                                            @else
+                                                <a href="{{ route('admin.students.edit',$student->student_id) }}"
+                                                   class="btn btn-sm btn-outline-primary" title="Edit">
+                                                    <i class="bi bi-pencil"></i>
+                                                </a>
+                                            @endif
                                         @endif
+
                                         @if(Auth::user()->hasPermission('delete_student'))
                                             <button class="btn btn-sm btn-outline-danger" title="Delete"
                                                     data-id="{{ $student->student_id }}"
@@ -185,7 +215,8 @@
                 <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body small text-muted">
-                Are you sure you want to delete <strong id="deleteStudentName"></strong>?
+                Are you sure you want to delete
+                <strong id="deleteStudentName"></strong>?
             </div>
             <div class="modal-footer border-0 pt-0">
                 <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
@@ -209,71 +240,80 @@ var disabilityFilter = document.getElementById('disabilityFilter');
 var statusFilter     = document.getElementById('statusFilter');
 var tbody            = document.querySelector('#studentsTable tbody');
 
-Array.from(tbody.querySelectorAll('tr')).forEach(function(el,i){ el.dataset.originalOrder=i; });
+Array.from(tbody.querySelectorAll('tr')).forEach(function (el, i) {
+    el.dataset.originalOrder = i;
+});
 
-function applyFilters(){
-    var search    = searchInput.value.toLowerCase().trim();
-    var sort      = sortSelect.value;
-    var program   = programFilter.value;
-    var disability= disabilityFilter.value;
-    var status    = statusFilter.value;
-    var hasFilter = search!==''||program!==''||disability!==''||status!==''||sort!=='default';
+function applyFilters() {
+    var search     = searchInput.value.toLowerCase().trim();
+    var sort       = sortSelect.value;
+    var program    = programFilter.value;
+    var disability = disabilityFilter.value;
+    var status     = statusFilter.value;
+    var hasFilter  = search !== '' || program !== '' || disability !== ''
+                     || status !== '' || sort !== 'default';
 
-    var categoryHeaders=Array.from(tbody.querySelectorAll('tr.category-header'));
-    var categorySpacers=Array.from(tbody.querySelectorAll('tr.category-spacer'));
-    var dataRows       =Array.from(tbody.querySelectorAll('tr[data-search]'));
-    var noResultsDiv   =document.getElementById('noResults');
+    var categoryHeaders = Array.from(tbody.querySelectorAll('tr.category-header'));
+    var categorySpacers = Array.from(tbody.querySelectorAll('tr.category-spacer'));
+    var dataRows        = Array.from(tbody.querySelectorAll('tr[data-search]'));
+    var noResultsDiv    = document.getElementById('noResults');
 
-    if(!hasFilter){
+    if (!hasFilter) {
         Array.from(tbody.querySelectorAll('tr'))
-            .sort(function(a,b){return parseInt(a.dataset.originalOrder||0)-parseInt(b.dataset.originalOrder||0);})
-            .forEach(function(el){tbody.appendChild(el);});
-        categoryHeaders.forEach(function(h){h.style.display='';});
-        categorySpacers.forEach(function(s){s.style.display='';});
-        dataRows.forEach(function(r){r.style.display='';});
-        noResultsDiv.style.display='none';
+            .sort(function (a, b) {
+                return parseInt(a.dataset.originalOrder || 0)
+                     - parseInt(b.dataset.originalOrder || 0);
+            })
+            .forEach(function (el) { tbody.appendChild(el); });
+        categoryHeaders.forEach(function (h) { h.style.display = ''; });
+        categorySpacers.forEach(function (s) { s.style.display = ''; });
+        dataRows.forEach(function (r) { r.style.display = ''; });
+        noResultsDiv.style.display = 'none';
         return;
     }
 
-    categoryHeaders.forEach(function(h){h.style.display='none';});
-    categorySpacers.forEach(function(s){s.style.display='none';});
+    categoryHeaders.forEach(function (h) { h.style.display = 'none'; });
+    categorySpacers.forEach(function (s) { s.style.display = 'none'; });
 
-    dataRows.forEach(function(row){
-        var show=true;
-        if(search&&!(row.dataset.search||'').includes(search)){show=false;}
-        if(program&&row.dataset.program!==program){show=false;}
-        if(status&&row.dataset.status!==status){show=false;}
-        if(disability&&!row.dataset.disabilities.split(',').includes(disability)){show=false;}
-        row.style.display=show?'':'none';
+    dataRows.forEach(function (row) {
+        var show = true;
+        if (search     && !(row.dataset.search || '').includes(search))          { show = false; }
+        if (program    && row.dataset.program !== program)                        { show = false; }
+        if (status     && row.dataset.status  !== status)                         { show = false; }
+        if (disability && !row.dataset.disabilities.split(',').includes(disability)) { show = false; }
+        row.style.display = show ? '' : 'none';
     });
 
-    var visible=dataRows.filter(function(r){return r.style.display!=='none';});
-    noResultsDiv.style.display=(visible.length===0)?'':'none';
+    var visible = dataRows.filter(function (r) { return r.style.display !== 'none'; });
+    noResultsDiv.style.display = (visible.length === 0) ? '' : 'none';
 
-    visible.sort(function(a,b){
-        if(sort==='az') return (a.dataset.name||'').localeCompare(b.dataset.name||'');
-        if(sort==='za') return (b.dataset.name||'').localeCompare(a.dataset.name||'');
-        if(sort==='created')  return (b.dataset.created||0)-(a.dataset.created||0);
-        if(sort==='modified') return (b.dataset.modified||0)-(a.dataset.modified||0);
+    visible.sort(function (a, b) {
+        if (sort === 'az')       return (a.dataset.name || '').localeCompare(b.dataset.name || '');
+        if (sort === 'za')       return (b.dataset.name || '').localeCompare(a.dataset.name || '');
+        if (sort === 'created')  return (b.dataset.created  || 0) - (a.dataset.created  || 0);
+        if (sort === 'modified') return (b.dataset.modified || 0) - (a.dataset.modified || 0);
         return 0;
     });
-    visible.forEach(function(r){tbody.appendChild(r);});
+    visible.forEach(function (r) { tbody.appendChild(r); });
 }
 
-function clearFilters(){
-    searchInput.value=''; sortSelect.value='default';
-    programFilter.value=''; disabilityFilter.value=''; statusFilter.value='';
+function clearFilters() {
+    searchInput.value      = '';
+    sortSelect.value       = 'default';
+    programFilter.value    = '';
+    disabilityFilter.value = '';
+    statusFilter.value     = '';
     applyFilters();
 }
 
-function confirmDelete(id,name){
-    document.getElementById('deleteStudentName').textContent=name;
-    document.getElementById('deleteForm').action='/admin/students/'+id;
+function confirmDelete(id, name) {
+    document.getElementById('deleteStudentName').textContent = name;
+    document.getElementById('deleteForm').action = '/admin/students/' + id;
     new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 
-[searchInput,sortSelect,programFilter,disabilityFilter,statusFilter].forEach(function(el){
-    el.addEventListener('input',applyFilters);
+[searchInput, sortSelect, programFilter, disabilityFilter, statusFilter].forEach(function (el) {
+    el.addEventListener('input', applyFilters);
 });
 
 applyFilters();

@@ -20,12 +20,25 @@ class StudentController extends Controller
     public function index()
     {
         Log::info('Student Management: index accessed', ['by' => Auth::user()->username]);
-        $students      = Student::with(['guardian.user','programLevel','disabilities'])
+
+        $students      = Student::with(['guardian.user', 'programLevel', 'disabilities'])
             ->whereNull('deleted_at')->get();
         $programLevels = ProgramLevel::all();
         $disabilities  = Disability::all();
 
-        return view('admin.students.index', compact('students','programLevels','disabilities'));
+        // Student IDs that have a pending online enrollment — these cannot be edited
+        $lockedStudentIds = \App\Models\Enrollment::where('enrollment_type', 'online')
+            ->where('status', 'pending')
+            ->whereNull('deleted_at')
+            ->pluck('student_id')
+            ->toArray();
+
+        return view('admin.students.index', compact(
+            'students',
+            'programLevels',
+            'disabilities',
+            'lockedStudentIds'
+        ));
     }
 
     public function create()
@@ -42,8 +55,13 @@ class StudentController extends Controller
         $cities    = $geo->getCities('');
 
         return view('admin.students.create', compact(
-            'guardians','programLevels','disabilities','devPeds',
-            'regions','provinces','cities'
+            'guardians',
+            'programLevels',
+            'disabilities',
+            'devPeds',
+            'regions',
+            'provinces',
+            'cities'
         ));
     }
 
@@ -67,7 +85,7 @@ class StudentController extends Controller
             'barangay'         => 'required|string|min:4|max:100',
             'house_unit_no'    => 'required|string|min:1|max:100',
             'street'           => 'required|string|min:4|max:100',
-            'zip_code'         => ['required','regex:/^\d{4}$/'],
+            'zip_code'         => ['required', 'regex:/^\d{4}$/'],
             'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:51200',
             'disabilities'     => 'required|array|min:1',
             'disability_other' => 'nullable|string|max:255',
@@ -76,7 +94,7 @@ class StudentController extends Controller
         $picturePath = null;
         if ($request->hasFile('profile_picture')) {
             $picturePath = $request->file('profile_picture')
-                ->store('profile_pictures/students','public');
+                ->store('profile_pictures/students', 'public');
         }
 
         $student = Student::create([
@@ -119,7 +137,7 @@ class StudentController extends Controller
         ]);
 
         return redirect()->route('admin.students.index')
-            ->with('success','Student created successfully.');
+            ->with('success', 'Student created successfully.');
     }
 
     public function show(string $id)
@@ -129,7 +147,7 @@ class StudentController extends Controller
             'student_id' => $id,
         ]);
 
-        $student = Student::with(['guardian.user','programLevel','disabilities','devPed'])
+        $student = Student::with(['guardian.user', 'programLevel', 'disabilities', 'devPed'])
             ->findOrFail($id);
 
         return view('admin.students.show', compact('student'));
@@ -137,7 +155,20 @@ class StudentController extends Controller
 
     public function edit(string $id)
     {
-        $student       = Student::with(['disabilities'])->findOrFail($id);
+        $student = Student::with(['disabilities'])->findOrFail($id);
+
+        // Block edit if the student has a pending digital (online) enrollment
+        $isLocked = \App\Models\Enrollment::where('student_id', $id)
+            ->where('enrollment_type', 'online')
+            ->where('status', 'pending')
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if ($isLocked) {
+            return redirect()->route('admin.students.show', $id)
+                ->with('error', 'This student cannot be edited while their digital enrollment is pending review.');
+        }
+
         $guardians     = Guardian::with('user')
             ->whereHas('user', fn($q) => $q->whereNull('deleted_at'))->get();
         $programLevels = ProgramLevel::all();
@@ -150,14 +181,32 @@ class StudentController extends Controller
         $cities    = $geo->getCities($student->province ?? '');
 
         return view('admin.students.edit', compact(
-            'student','guardians','programLevels','disabilities','devPeds',
-            'regions','provinces','cities'
+            'student',
+            'guardians',
+            'programLevels',
+            'disabilities',
+            'devPeds',
+            'regions',
+            'provinces',
+            'cities'
         ));
     }
 
     public function update(Request $request, string $id)
     {
         $student = Student::findOrFail($id);
+
+        // Security: block update if student has a pending digital enrollment
+        $isLocked = \App\Models\Enrollment::where('student_id', $id)
+            ->where('enrollment_type', 'online')
+            ->where('status', 'pending')
+            ->whereNull('deleted_at')
+            ->exists();
+
+        if ($isLocked) {
+            return redirect()->route('admin.students.show', $id)
+                ->with('error', 'This student cannot be edited while their digital enrollment is pending review.');
+        }
 
         $request->validate([
             'first_name'       => 'required|string|min:2|max:100',
@@ -177,7 +226,7 @@ class StudentController extends Controller
             'barangay'         => 'required|string|min:4|max:100',
             'house_unit_no'    => 'required|string|min:1|max:100',
             'street'           => 'required|string|min:4|max:100',
-            'zip_code'         => ['required','regex:/^\d{4}$/'],
+            'zip_code'         => ['required', 'regex:/^\d{4}$/'],
             'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:51200',
             'disabilities'     => 'required|array|min:1',
             'disability_other' => 'nullable|string|max:255',
@@ -187,7 +236,7 @@ class StudentController extends Controller
         if ($request->hasFile('profile_picture')) {
             if ($picturePath) Storage::disk('public')->delete($picturePath);
             $picturePath = $request->file('profile_picture')
-                ->store('profile_pictures/students','public');
+                ->store('profile_pictures/students', 'public');
         }
 
         $student->update([
@@ -213,7 +262,7 @@ class StudentController extends Controller
             'dev_ped_id'       => $request->dev_ped_id,
         ]);
 
-        $student->disabilities()->sync($request->input('disabilities',[]));
+        $student->disabilities()->sync($request->input('disabilities', []));
 
         AuditLog::create([
             'user_id'    => Auth::user()->user_id,
@@ -229,12 +278,22 @@ class StudentController extends Controller
         ]);
 
         return redirect()->route('admin.students.index')
-            ->with('success','Student updated successfully.');
+            ->with('success', 'Student updated successfully.');
     }
 
     public function destroy(string $id)
     {
         $student = Student::findOrFail($id);
+
+        // Block if student has any enrollment records
+        if ($student->enrollments()->exists()) {
+            return back()->with(
+                'error',
+                '"' . $student->full_name . '" cannot be deleted because they have existing ' .
+                    'enrollment record(s). Delete the related enrollment(s) first.'
+            );
+        }
+
         $student->delete();
 
         AuditLog::create([
@@ -251,6 +310,6 @@ class StudentController extends Controller
         ]);
 
         return redirect()->route('admin.students.index')
-            ->with('success','Student deleted successfully.');
+            ->with('success', 'Student deleted successfully.');
     }
 }

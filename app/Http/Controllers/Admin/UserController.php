@@ -30,10 +30,10 @@ class UserController extends Controller
         $currentRole     = Auth::user()->role?->role_name;
         $preselectedRole = $request->query('role', '');
 
-        $allowedRoleNames = match($currentRole) {
-            'directress' => ['directress','admin','teacher','staff','guardian'],
-            'admin'      => ['admin','teacher','staff','guardian'],
-            'teacher'    => ['staff','guardian'],
+        $allowedRoleNames = match ($currentRole) {
+            'directress' => ['admin', 'teacher', 'staff', 'guardian'],
+            'admin'      => ['admin', 'teacher', 'staff', 'guardian'],
+            'teacher'    => ['staff', 'guardian'],
             default      => ['guardian'],
         };
 
@@ -41,8 +41,8 @@ class UserController extends Controller
         $permissions   = Permission::orderBy('category')->orderBy('permission_name')->get();
 
         $rolePermsRaw = DB::table('role_permissions')
-            ->join('roles','role_permissions.role_id','=','roles.role_id')
-            ->select('roles.role_id','role_permissions.permission_id')
+            ->join('roles', 'role_permissions.role_id', '=', 'roles.role_id')
+            ->select('roles.role_id', 'role_permissions.permission_id')
             ->get();
 
         $rolePermissions = [];
@@ -51,7 +51,7 @@ class UserController extends Controller
         }
 
         // view_audit_log permission ID (for auto-check)
-        $viewAuditLogId = Permission::where('permission_name','view_audit_log')
+        $viewAuditLogId = Permission::where('permission_name', 'view_audit_log')
             ->value('permission_id');
 
         $geo       = new PhilippinesGeo();
@@ -60,8 +60,13 @@ class UserController extends Controller
         $cities    = $geo->getCities('');
 
         return view('admin.users.create', compact(
-            'allowedRoles','permissions','rolePermissions',
-            'preselectedRole','regions','provinces','cities',
+            'allowedRoles',
+            'permissions',
+            'rolePermissions',
+            'preselectedRole',
+            'regions',
+            'provinces',
+            'cities',
             'viewAuditLogId'
         ));
     }
@@ -76,15 +81,15 @@ class UserController extends Controller
             'sex'              => 'required|in:male,female,prefer_not_to_say,others',
             'sex_specify'      => 'nullable|string|max:100',
             'birthdate'        => 'nullable|date',
-            'contact_number_1' => ['required','regex:/^09\d{9}$/'],
-            'contact_number_2' => ['nullable','regex:/^09\d{9}$/'],
+            'contact_number_1' => ['required', 'regex:/^09\d{9}$/'],
+            'contact_number_2' => ['nullable', 'regex:/^09\d{9}$/'],
             'region'           => 'required|string|max:100',
             'province'         => 'required|string|max:100',
             'city'             => 'required|string|max:100',
             'barangay'         => 'required|string|min:4|max:100',
             'house_unit_no'    => 'required|string|min:1|max:100',
             'street'           => 'required|string|min:4|max:100',
-            'zip_code'         => ['required','regex:/^\d{4}$/'],
+            'zip_code'         => ['required', 'regex:/^\d{4}$/'],
             'email'            => 'required|email|unique:users,email',
             'username'         => 'required|string|min:4|max:50|unique:users,username',
             'password'         => 'required|string|min:6|confirmed',
@@ -101,7 +106,7 @@ class UserController extends Controller
         $picturePath = null;
         if ($request->hasFile('profile_picture')) {
             $picturePath = $request->file('profile_picture')
-                ->store('profile_pictures/users','public');
+                ->store('profile_pictures/users', 'public');
         }
 
         $user = User::create([
@@ -143,7 +148,7 @@ class UserController extends Controller
                 ]);
             }
         } else {
-            foreach ($request->input('permissions',[]) as $permId) {
+            foreach ($request->input('permissions', []) as $permId) {
                 DB::table('user_permissions')->insertOrIgnore([
                     'user_id'       => $user->user_id,
                     'permission_id' => $permId,
@@ -167,16 +172,16 @@ class UserController extends Controller
 
         if ($role && $role->role_name === 'guardian') {
             return redirect()->route('admin.guardians.index')
-                ->with('success','Guardian account created successfully.');
+                ->with('success', 'Guardian account created successfully.');
         }
 
         return redirect()->route('admin.users.index')
-            ->with('success','User created successfully.');
+            ->with('success', 'User created successfully.');
     }
 
     public function show(string $id)
     {
-        $user           = User::with(['role','permissions','guardian'])->findOrFail($id);
+        $user           = User::with(['role', 'permissions', 'guardian'])->findOrFail($id);
         $allPermissions = Permission::orderBy('category')->orderBy('permission_name')->get();
 
         Log::info('User Management: viewing user', [
@@ -184,34 +189,34 @@ class UserController extends Controller
             'user_id' => $id,
         ]);
 
-        return view('admin.users.show', compact('user','allPermissions'));
+        return view('admin.users.show', compact('user', 'allPermissions'));
     }
 
     public function edit(string $id)
     {
-        $user         = User::with(['role','permissions','guardian'])->findOrFail($id);
+        $user         = User::with(['role', 'permissions', 'guardian'])->findOrFail($id);
         $currentRole  = Auth::user()->role?->role_name;
         $userRoleName = $user->role?->role_name;
 
-        $allowedRoleNames = match($currentRole) {
-            'directress' => ['directress','admin','teacher','staff','guardian'],
-            'admin'      => ['admin','teacher','staff','guardian'],
-            'teacher'    => ['staff','guardian'],
+        $allowedRoleNames = match ($currentRole) {
+            'directress' => ['directress', 'admin', 'teacher', 'staff', 'guardian'],
+            'admin'      => ['admin', 'teacher', 'staff', 'guardian'],
+            'teacher'    => ['staff', 'guardian'],
             default      => ['guardian'],
         };
 
         if ($userRoleName === 'guardian') {
-            $allowedRoles = Role::where('role_name','guardian')->get();
+            $allowedRoles = Role::where('role_name', 'guardian')->get();
         } else {
             $allowedRoles = Role::whereIn('role_name', $allowedRoleNames)
-                ->where('role_name','!=','guardian')->get();
+                ->where('role_name', '!=', 'guardian')->get();
         }
 
         $permissions  = Permission::orderBy('category')->orderBy('permission_name')->get();
 
         $rolePermsRaw = DB::table('role_permissions')
-            ->join('roles','role_permissions.role_id','=','roles.role_id')
-            ->select('roles.role_id','role_permissions.permission_id')
+            ->join('roles', 'role_permissions.role_id', '=', 'roles.role_id')
+            ->select('roles.role_id', 'role_permissions.permission_id')
             ->get();
 
         $rolePermissions = [];
@@ -219,7 +224,7 @@ class UserController extends Controller
             $rolePermissions[$rp->role_id][] = $rp->permission_id;
         }
 
-        $viewAuditLogId = Permission::where('permission_name','view_audit_log')
+        $viewAuditLogId = Permission::where('permission_name', 'view_audit_log')
             ->value('permission_id');
 
         $geo       = new PhilippinesGeo();
@@ -228,8 +233,14 @@ class UserController extends Controller
         $cities    = $geo->getCities($user->province ?? '');
 
         return view('admin.users.edit', compact(
-            'user','userRoleName','allowedRoles','permissions',
-            'rolePermissions','regions','provinces','cities',
+            'user',
+            'userRoleName',
+            'allowedRoles',
+            'permissions',
+            'rolePermissions',
+            'regions',
+            'provinces',
+            'cities',
             'viewAuditLogId'
         ));
     }
@@ -245,17 +256,17 @@ class UserController extends Controller
             'sex'              => 'required|in:male,female,prefer_not_to_say,others',
             'sex_specify'      => 'nullable|string|max:100',
             'birthdate'        => 'nullable|date',
-            'contact_number_1' => ['required','regex:/^09\d{9}$/'],
-            'contact_number_2' => ['nullable','regex:/^09\d{9}$/'],
+            'contact_number_1' => ['required', 'regex:/^09\d{9}$/'],
+            'contact_number_2' => ['nullable', 'regex:/^09\d{9}$/'],
             'region'           => 'required|string|max:100',
             'province'         => 'required|string|max:100',
             'city'             => 'required|string|max:100',
             'barangay'         => 'required|string|min:4|max:100',
             'house_unit_no'    => 'required|string|min:1|max:100',
             'street'           => 'required|string|min:4|max:100',
-            'zip_code'         => ['required','regex:/^\d{4}$/'],
-            'email'            => 'required|email|unique:users,email,'.$user->user_id.',user_id',
-            'username'         => 'required|string|min:4|max:50|unique:users,username,'.$user->user_id.',user_id',
+            'zip_code'         => ['required', 'regex:/^\d{4}$/'],
+            'email'            => 'required|email|unique:users,email,' . $user->user_id . ',user_id',
+            'username'         => 'required|string|min:4|max:50|unique:users,username,' . $user->user_id . ',user_id',
             'password'         => 'nullable|string|min:6|confirmed',
             'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:51200',
             'permissions'      => 'nullable|array',
@@ -270,7 +281,7 @@ class UserController extends Controller
         if ($request->hasFile('profile_picture')) {
             if ($picturePath) Storage::disk('public')->delete($picturePath);
             $picturePath = $request->file('profile_picture')
-                ->store('profile_pictures/users','public');
+                ->store('profile_pictures/users', 'public');
         }
 
         $data = [
@@ -305,8 +316,8 @@ class UserController extends Controller
         }
 
         if ($role && $role->role_name !== 'guardian' && $request->has('permissions')) {
-            DB::table('user_permissions')->where('user_id',$user->user_id)->delete();
-            foreach ($request->input('permissions',[]) as $permId) {
+            DB::table('user_permissions')->where('user_id', $user->user_id)->delete();
+            foreach ($request->input('permissions', []) as $permId) {
                 DB::table('user_permissions')->insertOrIgnore([
                     'user_id'       => $user->user_id,
                     'permission_id' => $permId,
@@ -328,7 +339,7 @@ class UserController extends Controller
         ]);
 
         return redirect()->route('admin.users.index')
-            ->with('success','User updated successfully.');
+            ->with('success', 'User updated successfully.');
     }
 
     public function toggle(string $id)
@@ -350,12 +361,26 @@ class UserController extends Controller
             'is_active' => $user->is_active,
         ]);
 
-        return back()->with('success','User status updated.');
+        return back()->with('success', 'User status updated.');
     }
 
     public function destroy(string $id)
     {
         $user = User::findOrFail($id);
+
+        // Block if guardian has linked students
+        if ($user->role?->role_name === 'guardian') {
+            $linkedCount = $user->guardian?->students()->count() ?? 0;
+            if ($linkedCount > 0) {
+                return back()->with(
+                    'error',
+                    '"' . $user->full_name . '" cannot be deleted because this guardian account ' .
+                        'has ' . $linkedCount . ' linked student(s). ' .
+                        'Delete or reassign the student(s) first.'
+                );
+            }
+        }
+
         $user->delete();
 
         AuditLog::create([
@@ -373,6 +398,6 @@ class UserController extends Controller
         ]);
 
         return redirect()->route('admin.users.index')
-            ->with('success','User deleted successfully.');
+            ->with('success', 'User deleted successfully.');
     }
 }

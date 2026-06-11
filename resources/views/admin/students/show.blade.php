@@ -4,9 +4,18 @@
 
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0">Student Details</h5>
-    <a href="{{ route('admin.students.index') }}" class="btn btn-sm btn-outline-secondary">
-        <i class="bi bi-arrow-left me-1"></i>Back
-    </a>
+    {{-- Smart back button --}}
+    @if(request('from_guardian'))
+        <a href="{{ route('admin.guardians.show', request('from_guardian')) }}"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back to Guardian
+        </a>
+    @else
+        <a href="{{ route('admin.students.index') }}"
+           class="btn btn-sm btn-outline-secondary">
+            <i class="bi bi-arrow-left me-1"></i>Back
+        </a>
+    @endif
 </div>
 
 @php

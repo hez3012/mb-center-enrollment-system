@@ -147,6 +147,10 @@
                             </td>
                         </tr>
                         @foreach($group['items'] as $enrollment)
+                            @php
+                                $isOnlinePending = $enrollment->enrollment_type === 'online'
+                                                   && $enrollment->status === 'pending';
+                            @endphp
                             <tr data-name="{{ strtolower(optional($enrollment->student)->last_name ?? '') }}"
                                 data-created="{{ $enrollment->created_at ? $enrollment->created_at->timestamp : 0 }}"
                                 data-year="{{ $enrollment->school_year_id }}"
@@ -174,16 +178,23 @@
                                 </td>
                                 <td>
                                     <div class="d-flex gap-1">
+                                        {{-- View: always visible --}}
                                         <a href="{{ route('admin.enrollments.show', $enrollment->enrollment_id) }}"
                                            class="btn btn-sm btn-outline-info" title="View">
                                             <i class="bi bi-eye"></i>
                                         </a>
-                                        @if(in_array($enrollment->status, $editableStatuses) && Auth::user()->hasPermission('edit_enrollment'))
+
+                                        {{-- Edit: hidden for online+pending; visible for walk-in or approved online --}}
+                                        @if(in_array($enrollment->status, $editableStatuses)
+                                            && Auth::user()->hasPermission('edit_enrollment')
+                                            && !$isOnlinePending)
                                             <a href="{{ route('admin.enrollments.edit', $enrollment->enrollment_id) }}"
                                                class="btn btn-sm btn-outline-primary" title="Edit">
                                                 <i class="bi bi-pencil"></i>
                                             </a>
                                         @endif
+
+                                        {{-- Delete: always visible --}}
                                         @if(Auth::user()->hasPermission('delete_enrollment'))
                                             <button class="btn btn-sm btn-outline-danger"
                                                     title="Delete"
@@ -197,7 +208,7 @@
                             </tr>
                         @endforeach
                         <tr class="category-spacer">
-                            <td colspan="8" style="height:10px; border:none; padding:0;"></td>
+                            <td colspan="8" style="height:10px;border:none;padding:0;"></td>
                         </tr>
                     @endif
                 @endforeach
@@ -245,7 +256,7 @@ var typeFilter   = document.getElementById('typeFilter');
 var sortSelect   = document.getElementById('sortSelect');
 var tbody        = document.querySelector('#enrollmentsTable tbody');
 
-Array.from(tbody.querySelectorAll('tr')).forEach(function(el, i) {
+Array.from(tbody.querySelectorAll('tr')).forEach(function (el, i) {
     el.dataset.originalOrder = i;
 });
 
@@ -255,7 +266,8 @@ function applyFilters() {
     var status    = statusFilter.value;
     var type      = typeFilter.value;
     var sort      = sortSelect.value;
-    var hasFilter = search !== '' || year !== '' || status !== '' || type !== '' || sort !== 'default';
+    var hasFilter = search !== '' || year !== '' || status !== ''
+                    || type !== '' || sort !== 'default';
 
     var categoryHeaders = Array.from(tbody.querySelectorAll('tr.category-header'));
     var categorySpacers = Array.from(tbody.querySelectorAll('tr.category-spacer'));
@@ -264,22 +276,22 @@ function applyFilters() {
 
     if (!hasFilter) {
         Array.from(tbody.querySelectorAll('tr'))
-            .sort(function(a, b) {
-                return parseInt(a.dataset.originalOrder || 0) - parseInt(b.dataset.originalOrder || 0);
+            .sort(function (a, b) {
+                return parseInt(a.dataset.originalOrder || 0)
+                     - parseInt(b.dataset.originalOrder || 0);
             })
-            .forEach(function(el) { tbody.appendChild(el); });
-
-        categoryHeaders.forEach(function(h) { h.style.display = ''; });
-        categorySpacers.forEach(function(s) { s.style.display = ''; });
-        dataRows.forEach(function(r) { r.style.display = ''; });
+            .forEach(function (el) { tbody.appendChild(el); });
+        categoryHeaders.forEach(function (h) { h.style.display = ''; });
+        categorySpacers.forEach(function (s) { s.style.display = ''; });
+        dataRows.forEach(function (r) { r.style.display = ''; });
         noResultsDiv.style.display = 'none';
         return;
     }
 
-    categoryHeaders.forEach(function(h) { h.style.display = 'none'; });
-    categorySpacers.forEach(function(s) { s.style.display = 'none'; });
+    categoryHeaders.forEach(function (h) { h.style.display = 'none'; });
+    categorySpacers.forEach(function (s) { s.style.display = 'none'; });
 
-    dataRows.forEach(function(row) {
+    dataRows.forEach(function (row) {
         var show = true;
         if (search && !(row.dataset.search || '').includes(search)) { show = false; }
         if (year   && row.dataset.year   !== year)                   { show = false; }
@@ -288,18 +300,17 @@ function applyFilters() {
         row.style.display = show ? '' : 'none';
     });
 
-    var visible = dataRows.filter(function(r) { return r.style.display !== 'none'; });
+    var visible = dataRows.filter(function (r) { return r.style.display !== 'none'; });
     noResultsDiv.style.display = (visible.length === 0) ? '' : 'none';
 
-    visible.sort(function(a, b) {
+    visible.sort(function (a, b) {
         if (sort === 'newest') { return (b.dataset.created || 0) - (a.dataset.created || 0); }
         if (sort === 'oldest') { return (a.dataset.created || 0) - (b.dataset.created || 0); }
         if (sort === 'az')     { return (a.dataset.name || '').localeCompare(b.dataset.name || ''); }
         if (sort === 'za')     { return (b.dataset.name || '').localeCompare(a.dataset.name || ''); }
         return 0;
     });
-
-    visible.forEach(function(r) { tbody.appendChild(r); });
+    visible.forEach(function (r) { tbody.appendChild(r); });
 }
 
 function clearFilters() {
@@ -316,11 +327,10 @@ function confirmDelete(id) {
     new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 
-[searchInput, yearFilter, statusFilter, typeFilter, sortSelect].forEach(function(el) {
+[searchInput, yearFilter, statusFilter, typeFilter, sortSelect].forEach(function (el) {
     el.addEventListener('input', applyFilters);
 });
 
 applyFilters();
 </script>
-
 @endsection

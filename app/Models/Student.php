@@ -165,4 +165,9 @@ class Student extends Model
             'disability_id'
         );
     }
+
+    public function enrollments()
+    {
+        return $this->hasMany(\App\Models\Enrollment::class, 'student_id', 'student_id');
+    }
 }
