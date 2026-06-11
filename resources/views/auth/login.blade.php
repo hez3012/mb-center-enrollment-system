@@ -15,7 +15,7 @@
             <div class="card shadow-sm border-0">
                 <div class="card-body p-5">
 
-                    <!-- Header -->
+                    {{-- Header --}}
                     <div class="text-center mb-4">
                         <h4 class="fw-bold text-primary">H.O.P.E.</h4>
                         <p class="text-muted small mb-0">
@@ -24,7 +24,7 @@
                         <p class="text-muted small">M.B. Therapy Center</p>
                     </div>
 
-                    <!-- Error messages -->
+                    {{-- Error messages --}}
                     @if($errors->any())
                         <div class="alert alert-danger py-2">
                             <i class="bi bi-exclamation-circle me-1"></i>
@@ -32,11 +32,10 @@
                         </div>
                     @endif
 
-                    <!-- Login Form -->
+                    {{-- Login Form --}}
                     <form method="POST" action="{{ route('login.post') }}">
                         @csrf
 
-                        <!-- Email or Username -->
                         <div class="mb-3">
                             <label class="form-label fw-semibold">
                                 Email or Username
@@ -45,34 +44,27 @@
                                 <span class="input-group-text">
                                     <i class="bi bi-person"></i>
                                 </span>
-                                <input
-                                    type="text"
-                                    name="login"
-                                    class="form-control @error('login') is-invalid @enderror"
-                                    value="{{ old('login') }}"
-                                    placeholder="Enter your email or username"
-                                    autofocus
-                                    required>
+                                <input type="text" name="login"
+                                       class="form-control @error('login') is-invalid @enderror"
+                                       value="{{ old('login') }}"
+                                       placeholder="Enter your email or username"
+                                       autofocus required>
                             </div>
                         </div>
 
-                        <!-- Password -->
                         <div class="mb-4">
                             <label class="form-label fw-semibold">Password</label>
                             <div class="input-group">
                                 <span class="input-group-text">
                                     <i class="bi bi-lock"></i>
                                 </span>
-                                <input
-                                    type="password"
-                                    name="password"
-                                    class="form-control"
-                                    placeholder="Enter your password"
-                                    required>
+                                <input type="password" name="password"
+                                       class="form-control"
+                                       placeholder="Enter your password"
+                                       required>
                             </div>
                         </div>
 
-                        <!-- Submit -->
                         <div class="d-grid">
                             <button type="submit" class="btn btn-primary">
                                 <i class="bi bi-box-arrow-in-right me-1"></i>Login
@@ -80,6 +72,24 @@
                         </div>
 
                     </form>
+
+                    {{-- Register section --}}
+                    <hr class="my-4">
+                    <div class="text-center">
+                        <p class="text-muted small mb-2">
+                            Planning to enroll your child <strong>online</strong>?
+                        </p>
+                        <a href="{{ route('register') }}"
+                           class="btn btn-outline-primary btn-sm">
+                            <i class="bi bi-person-plus me-1"></i>
+                            Create a Guardian Account
+                        </a>
+                        <p class="text-muted mt-3 mb-0" style="font-size:0.75rem;">
+                            <i class="bi bi-info-circle me-1"></i>
+                            Walk-in enrollees: your account will be created
+                            by our staff. Please use the credentials provided to you.
+                        </p>
+                    </div>
 
                 </div>
             </div>
