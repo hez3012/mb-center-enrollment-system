@@ -366,8 +366,7 @@ document.getElementById('profilePicInput').addEventListener('change', function()
     var reader = new FileReader();
     reader.onload = function(e) {
         var w = document.getElementById('avatarWrapper');
-        w.innerHTML = '<img src="' + e.target.result
-            + '" class="av-56 rounded-circle" style="cursor:pointer;">';
+        w.innerHTML = '<img src="' + e.target.result + '" style="width:56px;height:56px;border-radius:50%;object-fit:cover;cursor:pointer;flex-shrink:0;">';
         w.querySelector('img').addEventListener('click', function() {
             document.getElementById('fullscreenImg').src = this.src;
             new bootstrap.Modal(document.getElementById('fullscreenModal')).show();

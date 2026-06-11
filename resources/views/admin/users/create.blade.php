@@ -412,7 +412,7 @@ document.getElementById('profilePicInput').addEventListener('change', function()
     var reader = new FileReader();
     reader.onload = function(e) {
         var w = document.getElementById('avatarWrapper');
-        w.innerHTML = '<img src="' + e.target.result + '" class="av-48 rounded-circle" style="cursor:pointer;">';
+        w.innerHTML = '<img src="' + e.target.result + '" style="width:48px;height:48px;border-radius:50%;object-fit:cover;cursor:pointer;flex-shrink:0;">';
         w.querySelector('img').addEventListener('click', openFullscreen);
     };
     reader.readAsDataURL(file);

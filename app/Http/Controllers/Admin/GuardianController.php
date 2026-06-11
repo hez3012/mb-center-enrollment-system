@@ -13,7 +13,7 @@ class GuardianController extends Controller
 {
     public function index()
     {
-        $guardians = Guardian::with(['user','students.programLevel'])
+        $guardians = Guardian::with(['user', 'students.programLevel'])
             ->whereHas('user', fn($q) => $q->whereNull('deleted_at'))
             ->get();
 
@@ -22,9 +22,8 @@ class GuardianController extends Controller
 
     public function show(string $id)
     {
-        $guardian = Guardian::with(['user','students.programLevel','students.disabilities'])
+        $guardian = Guardian::with(['user', 'students.programLevel'])
             ->findOrFail($id);
-
         return view('admin.guardians.show', compact('guardian'));
     }
 
@@ -36,7 +35,7 @@ class GuardianController extends Controller
         $provinces = $geo->getProvinces($guardian->user->region ?? '');
         $cities    = $geo->getCities($guardian->user->province ?? '');
 
-        return view('admin.guardians.edit', compact('guardian','regions','provinces','cities'));
+        return view('admin.guardians.edit', compact('guardian', 'regions', 'provinces', 'cities'));
     }
 
     public function update(Request $request, string $id)
@@ -66,6 +65,6 @@ class GuardianController extends Controller
         ]);
 
         return redirect()->route('admin.guardians.index')
-            ->with('success','Guardian profile updated successfully.');
+            ->with('success', 'Guardian profile updated successfully.');
     }
 }

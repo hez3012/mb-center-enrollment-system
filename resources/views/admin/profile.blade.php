@@ -3,7 +3,6 @@
 @section('content')
 
 @php
-    /** @var \App\Models\User $me */
     $me     = auth()->user();
     $meName = trim($me->first_name . ' ' . $me->last_name);
     $meMI   = $me->middle_initial;
@@ -195,15 +194,6 @@
             <div class="row g-3 mb-4">
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">
-                        Email <span class="text-danger">*</span>
-                    </label>
-                    <input type="email" name="email"
-                           class="form-control @error('email') is-invalid @enderror"
-                           value="{{ old('email',$me->email) }}" required>
-                    @error('email')<div class="invalid-feedback">{{ $message }}</div>@enderror
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label fw-semibold">
                         Username <span class="text-danger">*</span>
                     </label>
                     <input type="text" name="username"
@@ -246,7 +236,7 @@
                         data-bs-dismiss="modal"></button>
             </div>
             <div class="modal-body p-0 text-center">
-                <img id="fullscreenImg" src="" alt="Profile Picture"
+                <img id="fullscreenImg" src="" alt=""
                      class="img-fluid rounded" style="max-height:80vh;">
             </div>
         </div>
@@ -254,12 +244,12 @@
 </div>
 
 <script>
-document.getElementById('middleNameInput').addEventListener('input', function() {
+document.getElementById('middleNameInput').addEventListener('input', function () {
     var mi = this.value.trim();
     document.getElementById('miDisplay').value = mi ? mi[0].toUpperCase() + '.' : '';
 });
 
-document.getElementById('birthdateInput').addEventListener('change', function() {
+document.getElementById('birthdateInput').addEventListener('change', function () {
     if (!this.value) { document.getElementById('ageDisplay').value = ''; return; }
     var birth = new Date(this.value);
     var today = new Date();
@@ -269,33 +259,33 @@ document.getElementById('birthdateInput').addEventListener('change', function() 
     document.getElementById('ageDisplay').value = age + ' years old';
 });
 
-document.getElementById('sexSelect').addEventListener('change', function() {
+document.getElementById('sexSelect').addEventListener('change', function () {
     document.getElementById('sexSpecifyWrapper')
         .classList.toggle('d-none', this.value !== 'others');
 });
 
-document.getElementById('profilePicInput').addEventListener('change', function() {
+document.getElementById('profilePicInput').addEventListener('change', function () {
     var file = this.files[0];
     if (!file) return;
     document.getElementById('picFileName').textContent = file.name;
     var reader = new FileReader();
-    reader.onload = function(e) {
+    reader.onload = function (e) {
         var w = document.getElementById('avatarWrapper');
         w.innerHTML = '<img src="' + e.target.result
-            + '" class="av-64 rounded-circle" style="cursor:pointer;object-fit:cover;">';
+            + '" style="width:64px;height:64px;border-radius:50%;object-fit:cover;cursor:pointer;flex-shrink:0;">';
         w.querySelector('img').addEventListener('click', openFullscreen);
     };
     reader.readAsDataURL(file);
 });
 
-(function() {
+(function () {
     var w   = document.getElementById('avatarWrapper');
     var img = w ? w.querySelector('img') : null;
     if (img) {
         img.style.cursor = 'pointer';
         img.addEventListener('click', openFullscreen);
     }
-})();
+}());
 
 function openFullscreen(e) {
     document.getElementById('fullscreenImg').src = e.target.src;

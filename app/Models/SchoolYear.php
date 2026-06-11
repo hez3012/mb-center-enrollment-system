@@ -3,28 +3,35 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-/**
- * @property int         $school_year_id
- * @property string      $year_label
- * @property string|null $start_date
- * @property string|null $end_date
- */
 class SchoolYear extends Model
 {
+    use SoftDeletes;
+
     protected $table      = 'school_year';
     protected $primaryKey = 'school_year_id';
-
-    public $timestamps = false;
+    public    $timestamps = false;
 
     protected $fillable = [
         'year_label',
         'start_date',
         'end_date',
+        'is_active',
     ];
 
-    public function enrollments()
+    protected $casts = [
+        'start_date' => 'date',
+        'end_date'   => 'date',
+        'is_active'  => 'boolean',
+        'deleted_at' => 'datetime',
+    ];
+
+    /**
+     * Return the currently active school year.
+     */
+    public static function current(): ?self
     {
-        return $this->hasMany(Enrollment::class, 'school_year_id');
+        return static::where('is_active', 1)->first();
     }
 }

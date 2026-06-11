@@ -44,7 +44,6 @@ class ProfileController extends Controller
             'house_unit_no'    => 'required|string|min:1|max:100',
             'street'           => 'required|string|min:4|max:100',
             'zip_code'         => ['required','regex:/^\d{4}$/'],
-            'email'            => 'required|email|unique:users,email,'.$user->user_id.',user_id',
             'username'         => 'required|string|min:4|max:50|unique:users,username,'.$user->user_id.',user_id',
             'password'         => 'nullable|string|min:6|confirmed',
             'profile_picture'  => 'nullable|image|mimes:jpg,jpeg,png|max:51200',
@@ -54,7 +53,7 @@ class ProfileController extends Controller
         if ($request->hasFile('profile_picture')) {
             if ($picturePath) Storage::disk('public')->delete($picturePath);
             $picturePath = $request->file('profile_picture')
-                ->store('profile_pictures/users','public');
+                ->store('profile_pictures/users', 'public');
         }
 
         $data = [
@@ -73,7 +72,6 @@ class ProfileController extends Controller
             'house_unit_no'    => $request->house_unit_no,
             'street'           => $request->street,
             'zip_code'         => $request->zip_code,
-            'email'            => $request->email,
             'username'         => $request->username,
             'profile_picture'  => $picturePath,
         ];
@@ -86,7 +84,7 @@ class ProfileController extends Controller
 
         Log::info('Profile updated', ['user_id' => $user->user_id]);
 
-        return back()->with('success','Profile updated successfully.');
+        return back()->with('success', 'Profile updated successfully.');
     }
 
     public function deactivate()
@@ -95,6 +93,6 @@ class ProfileController extends Controller
         $user->update(['is_active' => 0]);
         Auth::logout();
         return redirect()->route('login')
-            ->with('success','Your account has been deactivated.');
+            ->with('success', 'Your account has been deactivated.');
     }
 }
