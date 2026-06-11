@@ -9,34 +9,79 @@
     </a>
 </div>
 
+@if(session('success'))
+    <div class="alert alert-success alert-dismissible fade show">
+        <i class="bi bi-check-circle me-2"></i>{{ session('success') }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+    </div>
+@endif
+
+{{-- Status-based notices --}}
 @if($enrollment->status === 'pending')
-<div class="alert alert-warning">
-    <i class="bi bi-hourglass-split me-2"></i>
-    Your enrollment is <strong>pending review</strong> by the administrator.
-</div>
+    <div class="alert alert-warning">
+        <p class="fw-semibold mb-1">
+            <i class="bi bi-hourglass-split me-2"></i>
+            Your enrollment is <strong>pending review</strong> by our staff.
+        </p>
+        <p class="mb-1 small">
+            Once your application is reviewed and approved, you will need to visit
+            <strong>M.B. Therapy Center</strong> in person for over-the-counter payment
+            to complete the enrollment process.
+        </p>
+        <p class="mb-0 small text-muted">
+            <i class="bi bi-chat-dots me-1"></i>
+            Our facilitator will reach out to you via <strong>Messenger</strong>
+            to inform you of the result and guide you through the next steps.
+        </p>
+    </div>
+
 @elseif($enrollment->status === 'pending_payment')
-<div class="alert alert-info">
-    <i class="bi bi-cash-coin me-2"></i>
-    Your enrollment has been <strong>approved</strong>. Please proceed to the center to complete your payment.
-</div>
-@elseif($enrollment->status === 'payment_confirmed')
-<div class="alert alert-primary">
-    <i class="bi bi-check2-circle me-2"></i>
-    Your payment has been <strong>confirmed</strong>. Your child will be officially enrolled shortly.
-</div>
+    <div class="alert alert-info border-start border-4 border-info">
+        <p class="fw-semibold mb-1">
+            <i class="bi bi-check-circle-fill me-2"></i>
+            Your enrollment has been <strong>approved!</strong>
+        </p>
+        <p class="mb-1">
+            Please visit <strong>M.B. Therapy Center</strong> for
+            <strong>over-the-counter payment</strong> to officially complete
+            your child's enrollment.
+        </p>
+        <p class="mb-0 small text-muted">
+            <i class="bi bi-chat-dots me-1"></i>
+            Our facilitator will contact you via <strong>Messenger</strong>
+            for the payment details, schedule, and further instructions.
+            Please watch out for our message.
+        </p>
+    </div>
+
 @elseif($enrollment->status === 'enrolled')
-<div class="alert alert-success">
-    <i class="bi bi-check-circle me-2"></i>
-    Your child is now <strong>officially enrolled</strong>.
-</div>
+    <div class="alert alert-success">
+        <i class="bi bi-check-circle me-2"></i>
+        Your child is now <strong>officially enrolled — payment confirmed</strong>.
+        Welcome to M.B. Therapy Center!
+    </div>
+
+@elseif($enrollment->status === 'payment_confirmed')
+    <div class="alert alert-primary">
+        <i class="bi bi-check2-circle me-2"></i>
+        Your payment has been <strong>confirmed</strong>.
+        Your child will be officially enrolled shortly.
+    </div>
+
 @elseif($enrollment->status === 'rejected')
-<div class="alert alert-danger">
-    <i class="bi bi-x-circle me-2"></i>
-    Your enrollment was <strong>rejected</strong>.
-    @if($enrollment->rejection_reason)
-        Reason: <strong>{{ $enrollment->rejection_reason }}</strong>
-    @endif
-</div>
+    <div class="alert alert-danger">
+        <i class="bi bi-x-circle me-2"></i>
+        Your enrollment was <strong>rejected</strong>.
+        @if($enrollment->rejection_reason)
+            Reason: <strong>{{ $enrollment->rejection_reason }}</strong>
+        @endif
+    </div>
+
+@elseif($enrollment->status === 'withdrawn')
+    <div class="alert alert-secondary">
+        <i class="bi bi-clipboard-x me-2"></i>
+        This enrollment has been <strong>withdrawn</strong>.
+    </div>
 @endif
 
 <div class="row g-3">
@@ -55,7 +100,9 @@
                         ])
                         <div>
                             <div class="fw-semibold">{{ $enrollment->student->full_name }}</div>
-                            <small class="text-muted">{{ $enrollment->student->age }} years old</small>
+                            <small class="text-muted">
+                                {{ $enrollment->student->age }} years old
+                            </small>
                         </div>
                     </div>
                 @endif
@@ -106,7 +153,8 @@
             </div>
             <div class="card-body p-0">
                 @forelse($enrollment->documents as $doc)
-                    <div class="d-flex justify-content-between align-items-center px-3 py-2 border-bottom">
+                    <div class="d-flex justify-content-between align-items-center
+                                px-3 py-2 border-bottom">
                         <div>
                             <div class="fw-semibold small">
                                 {{ optional($doc->documentType)->document_name }}
@@ -123,14 +171,22 @@
                                     <i class="bi bi-file-earmark"></i>
                                 </a>
                             @endif
-                            @php $dc=['submitted'=>'success','pending'=>'warning','missing'=>'danger']; @endphp
+                            @php
+                                $dc = [
+                                    'submitted' => 'success',
+                                    'pending'   => 'warning',
+                                    'missing'   => 'danger',
+                                ];
+                            @endphp
                             <span class="badge bg-{{ $dc[$doc->submission_status] ?? 'secondary' }}">
                                 {{ ucfirst($doc->submission_status) }}
                             </span>
                         </div>
                     </div>
                 @empty
-                    <p class="text-muted small px-3 py-2 mb-0">No documents on record.</p>
+                    <p class="text-muted small px-3 py-2 mb-0">
+                        No documents on record.
+                    </p>
                 @endforelse
             </div>
         </div>

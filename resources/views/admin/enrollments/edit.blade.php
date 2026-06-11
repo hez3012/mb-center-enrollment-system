@@ -2,9 +2,15 @@
 @section('title', 'Edit Enrollment')
 @section('content')
 
+@php
+    $hasPayment     = $enrollment->payment !== null;
+    $isOnlinePending = $enrollment->status === 'pending'
+                       && $enrollment->enrollment_type === 'online';
+@endphp
+
 <div class="d-flex justify-content-between align-items-center mb-3">
     <h5 class="fw-bold mb-0">Edit Enrollment</h5>
-    <a href="{{ route('admin.enrollments.index') }}"
+    <a href="{{ route('admin.enrollments.show', $enrollment->enrollment_id) }}"
        class="btn btn-sm btn-outline-secondary">
         <i class="bi bi-arrow-left me-1"></i>Back
     </a>
@@ -18,7 +24,7 @@
             @csrf
             @method('PUT')
 
-            {{-- Student info display only --}}
+            {{-- Student info — read-only --}}
             <div class="alert alert-light border mb-4">
                 <div class="row">
                     <div class="col-md-4">
@@ -71,30 +77,46 @@
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">Status</label>
 
-                    {{--
-                        Restriction only applies to ONLINE enrollments in pending status.
-                        Walk-in enrollments can freely change status at any time.
-                    --}}
-                    @if($enrollment->status === 'pending' && $enrollment->enrollment_type === 'online')
+                    @if($isOnlinePending)
+                        {{-- Online + pending: locked, use Approve/Reject on View page --}}
                         <input type="hidden" name="status" value="pending">
                         <input type="text" class="form-control bg-light" readonly
                                value="Pending Review">
                         <small class="text-muted mt-1 d-block">
                             <i class="bi bi-info-circle me-1"></i>
-                            Use the <strong>Approve / Reject</strong> buttons on the View page first.
+                            Use the <strong>Approve / Reject</strong> buttons on the
+                            View page first.
                         </small>
-                    @else
+
+                    @elseif($hasPayment)
+                        {{-- After payment: Enrolled / Withdrawn / Completed --}}
                         <select name="status"
                                 class="form-select @error('status') is-invalid @enderror"
                                 required>
                             @foreach([
-                                'pending'           => 'Pending Review',
-                                'pending_payment'   => 'Pending Payment',
-                                'payment_confirmed' => 'Payment Confirmed',
-                                'enrolled'          => 'Enrolled',
-                                'rejected'          => 'Rejected',
-                                'withdrawn'         => 'Withdrawn',
-                                'completed'         => 'Completed',
+                                'enrolled'  => 'Enrolled — Payment Confirmed',
+                                'withdrawn' => 'Withdrawn',
+                                'completed' => 'Completed',
+                            ] as $val => $label)
+                                <option value="{{ $val }}"
+                                        {{ old('status', $enrollment->status) === $val ? 'selected' : '' }}>
+                                    {{ $label }}
+                                </option>
+                            @endforeach
+                        </select>
+                        @error('status')
+                            <div class="invalid-feedback">{{ $message }}</div>
+                        @enderror
+
+                    @else
+                        {{-- Before payment: Pending Payment / Rejected / Withdrawn --}}
+                        <select name="status"
+                                class="form-select @error('status') is-invalid @enderror"
+                                required>
+                            @foreach([
+                                'pending_payment' => 'Pending Payment',
+                                'rejected'        => 'Rejected',
+                                'withdrawn'       => 'Withdrawn',
                             ] as $val => $label)
                                 <option value="{{ $val }}"
                                         {{ old('status', $enrollment->status) === $val ? 'selected' : '' }}>
@@ -107,6 +129,7 @@
                         @enderror
                     @endif
                 </div>
+
                 <div class="col-md-6">
                     <label class="form-label fw-semibold">
                         Remarks <span class="text-muted small fw-normal">(optional)</span>
@@ -146,11 +169,19 @@
                 <i class="bi bi-file-earmark-check me-1"></i>Document Checklist
             </p>
             <div class="border rounded p-3 mb-4">
+                <p class="text-muted small mb-3">
+                    Upload a new file to replace the existing one.
+                    Status is locked to <strong>Missing</strong> until a file is on record.
+                </p>
                 @foreach($documentTypes as $docType)
                     @php
                         $existing = $enrollment->documents
                             ->where('document_type_id', $docType->document_type_id)
                             ->first();
+                        $hasFile         = $existing?->file_path !== null;
+                        $currentDocStatus = $hasFile
+                            ? ($existing?->submission_status ?? 'pending')
+                            : 'missing';
                     @endphp
                     <div class="border rounded p-3 mb-2 {{ $docType->is_required ? 'border-warning' : '' }}">
                         <div class="d-flex justify-content-between align-items-center mb-2">
@@ -162,13 +193,22 @@
                                 @endif
                             </div>
                             <select name="doc_status[{{ $docType->document_type_id }}]"
-                                    class="form-select form-select-sm" style="width:140px;">
-                                @foreach(['pending'=>'Pending','submitted'=>'Submitted','missing'=>'Missing'] as $val => $label)
-                                    <option value="{{ $val }}"
-                                            {{ old("doc_status.{$docType->document_type_id}", $existing?->submission_status ?? 'pending') === $val ? 'selected' : '' }}>
-                                        {{ $label }}
+                                    class="form-select form-select-sm doc-status-select"
+                                    data-has-file="{{ $hasFile ? '1' : '0' }}"
+                                    data-doc-type="{{ $docType->document_type_id }}"
+                                    style="width:145px;">
+                                @if(!$hasFile)
+                                    <option value="missing" selected>Missing</option>
+                                @else
+                                    <option value="pending"
+                                            {{ $currentDocStatus === 'pending' ? 'selected' : '' }}>
+                                        Pending
                                     </option>
-                                @endforeach
+                                    <option value="submitted"
+                                            {{ $currentDocStatus === 'submitted' ? 'selected' : '' }}>
+                                        Submitted
+                                    </option>
+                                @endif
                             </select>
                         </div>
                         <div class="row g-2">
@@ -185,8 +225,9 @@
                                 <input type="file"
                                        name="doc_file[{{ $docType->document_type_id }}]"
                                        class="form-control form-control-sm"
+                                       data-doc-type="{{ $docType->document_type_id }}"
                                        accept=".pdf,.jpg,.jpeg,.png">
-                                <small class="text-muted">JPG, PNG, or PDF only · Max 10MB</small>
+                                <small class="text-muted">JPG, PNG, or PDF · Max 10MB</small>
                             </div>
                             <div class="col-md-6">
                                 <input type="text"
@@ -206,4 +247,53 @@
         </form>
     </div>
 </div>
+
+<script>
+// ── Document status lock / unlock ────────────────────────────────────────────
+function lockDocSelect(select) {
+    select.innerHTML = '<option value="missing">Missing</option>';
+    select.value = 'missing';
+    select.style.pointerEvents   = 'none';
+    select.style.backgroundColor = '#e9ecef';
+    select.style.color           = '#6c757d';
+}
+
+function unlockDocSelect(select) {
+    var prev = select.value;
+    select.innerHTML = '';
+    var p = document.createElement('option');
+    p.value = 'pending'; p.textContent = 'Pending';
+    var s = document.createElement('option');
+    s.value = 'submitted'; s.textContent = 'Submitted';
+    select.appendChild(p);
+    select.appendChild(s);
+    select.value = (prev === 'submitted') ? 'submitted' : 'pending';
+    select.style.pointerEvents   = '';
+    select.style.backgroundColor = '';
+    select.style.color           = '';
+}
+
+document.querySelectorAll('.doc-status-select').forEach(function (select) {
+    // Initialize locked state for docs with no file
+    if (select.dataset.hasFile === '0') {
+        lockDocSelect(select);
+    }
+
+    var docTypeId = select.dataset.docType;
+    var fileInput = document.querySelector(
+        'input[type="file"][data-doc-type="' + docTypeId + '"]'
+    );
+    if (fileInput) {
+        fileInput.addEventListener('change', function () {
+            if (this.files.length > 0) {
+                unlockDocSelect(select);
+            } else if (select.dataset.hasFile === '0') {
+                // No existing file and user cleared input — lock again
+                lockDocSelect(select);
+            }
+            // If hasFile = '1' (existing file) and input cleared — keep unlocked
+        });
+    }
+});
+</script>
 @endsection

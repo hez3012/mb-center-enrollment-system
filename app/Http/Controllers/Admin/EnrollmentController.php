@@ -22,7 +22,7 @@ class EnrollmentController extends Controller
             'student',
             'schoolYear',
             'programLevel',
-            'processedBy'
+            'processedBy',
         ])->orderByDesc('created_at')->get();
 
         $schoolYears   = SchoolYear::orderByDesc('start_date')->get();
@@ -39,7 +39,7 @@ class EnrollmentController extends Controller
     {
         $currentYear = SchoolYear::current();
 
-        // Exclude students who already have any enrollment in the current school year
+        // Exclude students already enrolled in the current school year
         $enrolledIds = [];
         if ($currentYear) {
             $enrolledIds = Enrollment::where('school_year_id', $currentYear->school_year_id)
@@ -48,14 +48,16 @@ class EnrollmentController extends Controller
                 ->toArray();
         }
 
-        $students      = Student::with('programLevel')
+        $students = Student::with('programLevel')
             ->where('status', 'active')
             ->whereNotIn('student_id', $enrolledIds)
             ->get();
 
         $schoolYears   = SchoolYear::orderByDesc('start_date')->get();
         $programLevels = ProgramLevel::all();
-        $documentTypes = DocumentType::all();
+
+        // Filter out inactive document types (e.g. Parent/Guardian Waiver)
+        $documentTypes = DocumentType::where('is_active', 1)->get();
 
         return view('admin.enrollments.create', compact(
             'students',
@@ -116,12 +118,12 @@ class EnrollmentController extends Controller
                 }
 
                 EnrollmentDocument::create([
-                    'enrollment_id'    => $enrollment->enrollment_id,
-                    'document_type_id' => $docTypeId,
+                    'enrollment_id'     => $enrollment->enrollment_id,
+                    'document_type_id'  => $docTypeId,
                     'submission_status' => $status ?? 'pending',
-                    'file_path'        => $filePath,
-                    'submission_date'  => ($status === 'submitted') ? now()->toDateString() : null,
-                    'notes'            => $request->input("doc_notes.{$docTypeId}"),
+                    'file_path'         => $filePath,
+                    'submission_date'   => ($status === 'submitted') ? now()->toDateString() : null,
+                    'notes'             => $request->input("doc_notes.{$docTypeId}"),
                 ]);
             }
         }
@@ -144,23 +146,47 @@ class EnrollmentController extends Controller
     public function show($id)
     {
         $enrollment = Enrollment::with([
-            'student.guardian',
+            'student.guardian.user',
             'student.disabilities',
             'schoolYear',
             'programLevel',
             'processedBy',
             'documents.documentType',
+            'payment.recordedBy',
         ])->findOrFail($id);
 
-        return view('admin.enrollments.show', compact('enrollment'));
+        // Pre-compute blocking docs for walk-in payment gate
+        $blockingDocs = [];
+        if ($enrollment->status === 'pending_payment'
+            && $enrollment->enrollment_type === 'walk_in') {
+            $requiredTypes = DocumentType::where('is_required', true)
+                ->where('is_active', 1)
+                ->get();
+            foreach ($requiredTypes as $docType) {
+                $doc = $enrollment->documents
+                    ->where('document_type_id', $docType->document_type_id)
+                    ->first();
+                if (!$doc || $doc->submission_status !== 'submitted') {
+                    $blockingDocs[] = $docType->document_name;
+                }
+            }
+        }
+
+        return view('admin.enrollments.show', compact('enrollment', 'blockingDocs'));
     }
 
     public function edit($id)
     {
-        $enrollment    = Enrollment::with(['documents.documentType'])->findOrFail($id);
+        $enrollment = Enrollment::with([
+            'documents.documentType',
+            'payment',
+        ])->findOrFail($id);
+
         $schoolYears   = SchoolYear::orderByDesc('start_date')->get();
         $programLevels = ProgramLevel::all();
-        $documentTypes = DocumentType::all();
+
+        // Filter out inactive document types
+        $documentTypes = DocumentType::where('is_active', 1)->get();
 
         return view('admin.enrollments.edit', compact(
             'enrollment',
@@ -172,12 +198,25 @@ class EnrollmentController extends Controller
 
     public function update(Request $request, $id)
     {
-        $enrollment = Enrollment::findOrFail($id);
+        $enrollment = Enrollment::with('payment')->findOrFail($id);
+        $hasPayment = $enrollment->payment !== null;
+
+        // Determine allowed statuses based on payment state and current status
+        if ($enrollment->status === 'pending') {
+            // Online pending — locked, only allow "pending" through unchanged
+            $allowedStatuses = ['pending'];
+        } elseif ($hasPayment) {
+            // After payment — can only move to enrolled/withdrawn/completed
+            $allowedStatuses = ['enrolled', 'withdrawn', 'completed'];
+        } else {
+            // Before payment — can only move to pending_payment/rejected/withdrawn
+            $allowedStatuses = ['pending_payment', 'rejected', 'withdrawn'];
+        }
 
         $request->validate([
             'program_level_id' => 'required|exists:program_level,program_level_id',
             'enrollment_date'  => 'required|date',
-            'status'           => 'required|in:pending,pending_payment,payment_confirmed,enrolled,rejected,withdrawn,completed',
+            'status'           => ['required', 'in:' . implode(',', $allowedStatuses)],
             'waiver_signed'    => 'boolean',
             'rejection_reason' => 'nullable|string',
             'remarks'          => 'nullable|string',
@@ -210,14 +249,17 @@ class EnrollmentController extends Controller
                 }
 
                 EnrollmentDocument::updateOrCreate(
-                    ['enrollment_id' => $enrollment->enrollment_id, 'document_type_id' => $docTypeId],
+                    [
+                        'enrollment_id'    => $enrollment->enrollment_id,
+                        'document_type_id' => $docTypeId,
+                    ],
                     [
                         'submission_status' => $status ?? 'pending',
                         'file_path'         => $filePath,
                         'submission_date'   => ($status === 'submitted')
                             ? ($doc?->submission_date ?? now()->toDateString())
                             : null,
-                        'notes'             => $request->input("doc_notes.{$docTypeId}"),
+                        'notes' => $request->input("doc_notes.{$docTypeId}"),
                     ]
                 );
             }
@@ -282,7 +324,10 @@ class EnrollmentController extends Controller
             'action'     => 'UPDATE',
             'table_name' => 'enrollment',
             'record_id'  => $enrollment->enrollment_id,
-            'changes'    => json_encode(['action' => 'rejected', 'reason' => $request->rejection_reason]),
+            'changes'    => json_encode([
+                'action' => 'rejected',
+                'reason' => $request->rejection_reason,
+            ]),
         ]);
 
         return back()->with('success', 'Enrollment rejected.');

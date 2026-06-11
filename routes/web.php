@@ -10,6 +10,7 @@ use App\Http\Controllers\Admin\UserController;
 use App\Http\Controllers\Admin\GuardianController;
 use App\Http\Controllers\Admin\StudentController;
 use App\Http\Controllers\Admin\EnrollmentController;
+use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Portal\DashboardController  as PortalDashboardController;
 use App\Http\Controllers\Portal\ProfileController    as PortalProfileController;
 use App\Http\Controllers\Portal\EnrollmentController as PortalEnrollmentController;
@@ -181,6 +182,17 @@ Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
     Route::delete('/enrollments/{id}', [EnrollmentController::class, 'destroy'])
         ->middleware('permission:delete_enrollment')
         ->name('enrollments.destroy');
+
+    // ----------------------------------------------------------------
+    // Payment Management
+    // ----------------------------------------------------------------
+    Route::get('/enrollments/{id}/payment', [PaymentController::class, 'create'])
+        ->middleware('permission:record_payment')
+        ->name('enrollments.payment.create');
+
+    Route::post('/enrollments/{id}/payment', [PaymentController::class, 'store'])
+        ->middleware('permission:record_payment')
+        ->name('enrollments.payment.store');
 });
 
 /*

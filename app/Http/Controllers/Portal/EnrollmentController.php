@@ -48,7 +48,10 @@ class EnrollmentController extends Controller
         }
 
         $currentYear   = SchoolYear::current();
-        $documentTypes = DocumentType::all();
+
+        // Filter out inactive document types (e.g. Parent/Guardian Waiver)
+        $documentTypes = DocumentType::where('is_active', 1)->get();
+
         $programLevels = ProgramLevel::all();
         $disabilities  = Disability::whereNull('deleted_at')->get();
         $devPeds       = DevelopmentalPediatrician::whereNull('deleted_at')->get();
@@ -183,7 +186,7 @@ class EnrollmentController extends Controller
         ]);
 
         return redirect()->route('portal.enrollments.show', $enrollment->enrollment_id)
-            ->with('success', 'Enrollment submitted successfully. Please wait for admin approval.');
+            ->with('success', 'Your enrollment has been submitted successfully! Please wait for our internals to review your application.');
     }
 
     public function show($id)

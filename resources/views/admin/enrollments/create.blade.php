@@ -29,7 +29,8 @@
                         Student <span class="text-danger">*</span>
                     </label>
                     <select name="student_id" id="studentSelect"
-                            class="form-select @error('student_id') is-invalid @enderror" required>
+                            class="form-select @error('student_id') is-invalid @enderror"
+                            required>
                         <option value="">-- Select Student --</option>
                         @foreach($students as $student)
                             <option value="{{ $student->student_id }}"
@@ -46,7 +47,8 @@
                         School Year <span class="text-danger">*</span>
                     </label>
                     <select name="school_year_id"
-                            class="form-select @error('school_year_id') is-invalid @enderror" required>
+                            class="form-select @error('school_year_id') is-invalid @enderror"
+                            required>
                         <option value="">-- Select School Year --</option>
                         @foreach($schoolYears as $sy)
                             <option value="{{ $sy->school_year_id }}"
@@ -64,7 +66,8 @@
                         Program Level <span class="text-danger">*</span>
                     </label>
                     <select name="program_level_id" id="programLevelSelect"
-                            class="form-select @error('program_level_id') is-invalid @enderror" required>
+                            class="form-select @error('program_level_id') is-invalid @enderror"
+                            required>
                         <option value="">-- Select Program Level --</option>
                         @foreach($programLevels as $level)
                             <option value="{{ $level->program_level_id }}"
@@ -81,16 +84,18 @@
                     </label>
                     <input type="date" name="enrollment_date"
                            class="form-control @error('enrollment_date') is-invalid @enderror"
-                           value="{{ old('enrollment_date', now()->format('Y-m-d')) }}" required>
+                           value="{{ old('enrollment_date', now()->format('Y-m-d')) }}"
+                           required>
                     @error('enrollment_date')<div class="invalid-feedback">{{ $message }}</div>@enderror
                 </div>
                 <div class="col-md-3">
                     <label class="form-label fw-semibold">
                         Status <span class="text-danger">*</span>
                     </label>
-                    {{-- Options populated dynamically by JS — required docs only --}}
+                    {{-- Populated dynamically by JS based on required doc statuses --}}
                     <select name="status" id="enrollmentStatus"
-                            class="form-select @error('status') is-invalid @enderror" required>
+                            class="form-select @error('status') is-invalid @enderror"
+                            required>
                     </select>
                     @error('status')<div class="invalid-feedback">{{ $message }}</div>@enderror
                     <small class="text-muted" id="statusHint"></small>
@@ -122,11 +127,15 @@
             </p>
             <div class="border rounded p-3 mb-4">
                 <p class="text-muted small mb-3">
-                    Track submission status for each document. Optionally upload a scanned copy.
+                    Upload a scanned copy for each document.
+                    Status is automatically set to <strong>Missing</strong> until a file is uploaded.
                 </p>
                 @foreach($documentTypes as $docType)
-                    <div class="border rounded p-3 mb-2
-                                {{ $docType->is_required ? 'border-warning' : '' }}">
+                    @php
+                        $oldDocStatus    = old("doc_status.{$docType->document_type_id}");
+                        $initiallyHasFile = in_array($oldDocStatus, ['pending', 'submitted']);
+                    @endphp
+                    <div class="border rounded p-3 mb-2 {{ $docType->is_required ? 'border-warning' : '' }}">
                         <div class="d-flex justify-content-between align-items-center mb-2">
                             <div>
                                 <span class="fw-semibold small">{{ $docType->document_name }}</span>
@@ -138,25 +147,23 @@
                                           style="font-size:10px;">Optional</span>
                                 @endif
                             </div>
-                            {{--
-                                Add 'doc-status-required' only on required documents.
-                                The JS watches this class to determine allowed status options.
-                            --}}
                             <select name="doc_status[{{ $docType->document_type_id }}]"
                                     class="form-select form-select-sm doc-status-select {{ $docType->is_required ? 'doc-status-required' : '' }}"
+                                    data-has-file="{{ $initiallyHasFile ? '1' : '0' }}"
+                                    data-doc-type="{{ $docType->document_type_id }}"
                                     style="width:145px;">
-                                <option value="pending"
-                                        {{ old("doc_status.{$docType->document_type_id}", 'pending') === 'pending'    ? 'selected' : '' }}>
-                                    Pending
-                                </option>
-                                <option value="submitted"
-                                        {{ old("doc_status.{$docType->document_type_id}") === 'submitted' ? 'selected' : '' }}>
-                                    Submitted
-                                </option>
-                                <option value="missing"
-                                        {{ old("doc_status.{$docType->document_type_id}") === 'missing'   ? 'selected' : '' }}>
-                                    Missing
-                                </option>
+                                @if(!$initiallyHasFile)
+                                    <option value="missing" selected>Missing</option>
+                                @else
+                                    <option value="pending"
+                                            {{ $oldDocStatus === 'pending' ? 'selected' : '' }}>
+                                        Pending
+                                    </option>
+                                    <option value="submitted"
+                                            {{ $oldDocStatus === 'submitted' ? 'selected' : '' }}>
+                                        Submitted
+                                    </option>
+                                @endif
                             </select>
                         </div>
                         <div class="row g-2">
@@ -167,6 +174,7 @@
                                 <input type="file"
                                        name="doc_file[{{ $docType->document_type_id }}]"
                                        class="form-control form-control-sm"
+                                       data-doc-type="{{ $docType->document_type_id }}"
                                        accept=".pdf,.jpg,.jpeg,.png">
                             </div>
                             <div class="col-md-6">
@@ -190,6 +198,7 @@
 </div>
 
 <script>
+// ── Student → Program Level auto-select ─────────────────────────────────────
 var studentSelect = document.getElementById('studentSelect');
 var programSelect = document.getElementById('programLevelSelect');
 
@@ -203,11 +212,64 @@ studentSelect.addEventListener('change', function () {
     }
 });
 
-// ── Dynamic status dropdown — based on REQUIRED documents only ───────────────
+// ── Document status lock / unlock ────────────────────────────────────────────
+function lockDocSelect(select) {
+    select.innerHTML = '<option value="missing">Missing</option>';
+    select.value = 'missing';
+    select.style.pointerEvents   = 'none';
+    select.style.backgroundColor = '#e9ecef';
+    select.style.color           = '#6c757d';
+}
+
+function unlockDocSelect(select) {
+    var prev = select.value;
+    select.innerHTML = '';
+    var p = document.createElement('option');
+    p.value = 'pending'; p.textContent = 'Pending';
+    var s = document.createElement('option');
+    s.value = 'submitted'; s.textContent = 'Submitted';
+    select.appendChild(p);
+    select.appendChild(s);
+    select.value = (prev === 'submitted') ? 'submitted' : 'pending';
+    select.style.pointerEvents   = '';
+    select.style.backgroundColor = '';
+    select.style.color           = '';
+    updateStatusOptions();
+}
+
+document.querySelectorAll('.doc-status-select').forEach(function (select) {
+    // Initialize locked state
+    if (select.dataset.hasFile === '0') {
+        lockDocSelect(select);
+    }
+
+    // Listen for file input changes
+    var docTypeId = select.dataset.docType;
+    var fileInput = document.querySelector(
+        'input[type="file"][data-doc-type="' + docTypeId + '"]'
+    );
+    if (fileInput) {
+        fileInput.addEventListener('change', function () {
+            if (this.files.length > 0) {
+                unlockDocSelect(select);
+            } else if (select.dataset.hasFile === '0') {
+                lockDocSelect(select);
+                updateStatusOptions();
+            }
+        });
+    }
+
+    // Sync changes from unlocked selects to enrollment status
+    select.addEventListener('change', function () {
+        updateStatusOptions();
+    });
+});
+
+// ── Enrollment status dropdown — driven by required doc statuses ─────────────
 function updateStatusOptions() {
-    var statusSelect    = document.getElementById('enrollmentStatus');
-    var requiredSelects = document.querySelectorAll('.doc-status-required');
-    var current         = statusSelect.value;
+    var statusSelect     = document.getElementById('enrollmentStatus');
+    var requiredSelects  = document.querySelectorAll('.doc-status-required');
+    var current          = statusSelect.value;
 
     var statuses     = Array.from(requiredSelects).map(function (s) { return s.value; });
     var allSubmitted = statuses.length > 0 && statuses.every(function (s) { return s === 'submitted'; });
@@ -217,28 +279,26 @@ function updateStatusOptions() {
     var hint = '';
 
     if (requiredSelects.length === 0) {
-        // No required documents — show all options
         options = [
-            { value: 'enrolled',        label: 'Enrolled' },
             { value: 'pending_payment', label: 'Pending Payment' },
+            { value: 'enrolled',        label: 'Enrolled — Payment Confirmed' },
             { value: 'pending',         label: 'Pending Review' },
             { value: 'withdrawn',       label: 'Withdrawn' },
         ];
     } else if (allSubmitted) {
         options = [
             { value: 'pending_payment', label: 'Pending Payment' },
-            { value: 'enrolled',        label: 'Enrolled' },
             { value: 'withdrawn',       label: 'Withdrawn' },
         ];
         hint = 'All required documents submitted — enrollment can proceed.';
     } else if (anyMissing) {
         options = [
             { value: 'pending',   label: 'Pending Review' },
+            { value: 'rejected',  label: 'Rejected' },
             { value: 'withdrawn', label: 'Withdrawn' },
         ];
-        hint = 'One or more required documents are marked missing.';
+        hint = 'One or more required documents are marked as missing.';
     } else {
-        // Default — some or all required docs still pending
         options = [
             { value: 'pending', label: 'Pending Review' },
         ];
@@ -261,10 +321,7 @@ function updateStatusOptions() {
     document.getElementById('statusHint').textContent = hint;
 }
 
-document.querySelectorAll('.doc-status-select').forEach(function (sel) {
-    sel.addEventListener('change', updateStatusOptions);
-});
-
+// Run on page load
 updateStatusOptions();
 </script>
 @endsection
