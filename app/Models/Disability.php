@@ -4,30 +4,16 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-/**
- * @property int         $disability_id
- * @property string      $disability_name
- * @property string|null $description
- */
 class Disability extends Model
 {
     protected $table      = 'disability';
     protected $primaryKey = 'disability_id';
+    public $timestamps    = false;
 
-    public $timestamps = false;
+    protected $fillable = ['service_type_id', 'disability_name'];
 
-    protected $fillable = [
-        'disability_name',
-        'description',
-    ];
-
-    public function students()
+    public function serviceType()
     {
-        return $this->belongsToMany(
-            Student::class,
-            'student_disability',
-            'disability_id',
-            'student_id'
-        );
+        return $this->belongsTo(ServiceType::class, 'service_type_id', 'service_type_id');
     }
 }

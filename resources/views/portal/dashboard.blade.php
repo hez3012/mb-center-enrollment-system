@@ -19,7 +19,9 @@
         <div class="card border-0 shadow-sm text-center py-3">
             <div class="card-body">
                 <i class="bi bi-check-circle fs-2 text-success"></i>
-                <h3 class="fw-bold mt-2 mb-0">{{ $students->where('status','active')->count() }}</h3>
+                <h3 class="fw-bold mt-2 mb-0">
+                    {{ $students->where('status', 'active')->count() }}
+                </h3>
                 <small class="text-muted">Active Students</small>
             </div>
         </div>
@@ -36,8 +38,7 @@
             <thead class="table-light">
                 <tr>
                     <th>Full Name</th>
-                    <th>Program</th>
-                    <th>Disabilities</th>
+                    <th>Service Type</th>
                     <th>Status</th>
                 </tr>
             </thead>
@@ -45,14 +46,24 @@
                 @foreach($students as $student)
                 <tr>
                     <td>{{ $student->list_name }}</td>
-                    <td>{{ $student->programLevel?->program_name ?? '—' }}</td>
                     <td>
-                        @foreach($student->disabilities as $d)
-                            <span class="badge bg-info text-dark">{{ $d->disability_name }}</span>
-                        @endforeach
+                        @if($student->serviceType)
+                            <span class="badge bg-info text-dark">
+                                {{ $student->serviceType->service_name }}
+                            </span>
+                        @else
+                            <span class="text-muted">—</span>
+                        @endif
                     </td>
                     <td>
-                        @php $sc = ['active'=>'success','inactive'=>'secondary','withdrawn'=>'warning','completed'=>'primary']; @endphp
+                        @php
+                            $sc = [
+                                'active'    => 'success',
+                                'inactive'  => 'secondary',
+                                'withdrawn' => 'warning',
+                                'completed' => 'primary',
+                            ];
+                        @endphp
                         <span class="badge bg-{{ $sc[$student->status] ?? 'secondary' }}">
                             {{ ucfirst($student->status) }}
                         </span>
@@ -68,7 +79,8 @@
 @else
 <div class="alert alert-warning">
     <i class="bi bi-exclamation-triangle me-1"></i>
-    Your guardian profile is not fully set up yet. Please contact the administrator.
+    Your guardian profile is not fully set up yet.
+    Please contact the administrator.
 </div>
 @endif
 @endsection

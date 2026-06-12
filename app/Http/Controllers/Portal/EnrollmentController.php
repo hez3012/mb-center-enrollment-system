@@ -3,197 +3,189 @@
 namespace App\Http\Controllers\Portal;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
 use App\Models\Enrollment;
 use App\Models\EnrollmentDocument;
 use App\Models\Student;
 use App\Models\SchoolYear;
-use App\Models\DocumentType;
 use App\Models\ProgramLevel;
+use App\Models\ServiceType;
 use App\Models\Disability;
+use App\Models\DocumentType;
 use App\Models\DevelopmentalPediatrician;
-use App\Models\AuditLog;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Auth;
 
 class EnrollmentController extends Controller
 {
+    // ── Helper ────────────────────────────────────────────────────────────────
+    private function spedId(): int
+    {
+        $match = ServiceType::all()->first(function ($st) {
+            return stripos($st->service_name, 'sped') !== false
+                || stripos($st->service_name, 'special education') !== false;
+        });
+        return (int) $match?->service_type_id;
+    }
+
+    // ── Index ─────────────────────────────────────────────────────────────────
     public function index()
     {
-        $user       = Auth::user();
-        $guardian   = $user->guardian;
-        $studentIds = $guardian?->students->pluck('student_id')->toArray() ?? [];
+        /** @var \App\Models\User|null $authUser */
+        $authUser    = Auth::user();
+        $guardian    = $authUser?->guardian;
+        $currentYear = SchoolYear::current();
 
-        $enrollments = Enrollment::with(['student', 'schoolYear', 'programLevel'])
-            ->whereIn('student_id', $studentIds)
-            ->orderByDesc('created_at')
+        $enrollments = Enrollment::whereHas('student', function ($q) use ($guardian) {
+            $q->where('guardian_id', $guardian?->guardian_id);
+        })->with(['student.serviceType', 'schoolYear', 'programLevel'])
+            ->latest()
             ->get();
 
-        $currentYear         = SchoolYear::current();
-        $hasEligibleStudents = $guardian !== null && $currentYear !== null;
+        $hasEligibleStudents = $guardian && $currentYear;
 
-        return view('portal.enrollments.index', compact(
-            'enrollments',
-            'hasEligibleStudents'
-        ));
+        return view(
+            'portal.enrollments.index',
+            compact('enrollments', 'hasEligibleStudents')
+        );
     }
 
+    // ── Create ────────────────────────────────────────────────────────────────
     public function create()
     {
-        $user     = Auth::user();
-        $guardian = $user->guardian;
+        /** @var \App\Models\User|null $authUser */
+        $authUser    = Auth::user();
+        $guardian    = $authUser?->guardian;
+        $currentYear = SchoolYear::current();
 
-        if (!$guardian) {
-            return redirect()->route('portal.dashboard')
-                ->with('error', 'Your guardian profile is not set up yet.');
+        if (!$guardian || !$currentYear) {
+            return redirect()->route('portal.enrollments.index')
+                ->with('error', 'Enrollment is not available at this time.');
         }
 
-        $currentYear   = SchoolYear::current();
-
-        // Filter out inactive document types (e.g. Parent/Guardian Waiver)
-        $documentTypes = DocumentType::where('is_active', 1)->get();
-
-        $programLevels = ProgramLevel::all();
-        $disabilities  = Disability::whereNull('deleted_at')->get();
-        $devPeds       = DevelopmentalPediatrician::whereNull('deleted_at')->get();
-
-        return view('portal.enrollments.create', compact(
-            'currentYear',
-            'documentTypes',
-            'programLevels',
-            'disabilities',
-            'devPeds'
-        ));
+        return view('portal.enrollments.create', [
+            'guardian'      => $guardian,
+            'currentYear'   => $currentYear,
+            'serviceTypes'  => ServiceType::all(),
+            'disabilities'  => Disability::all(),
+            'programLevels' => ProgramLevel::all(),
+            'documentTypes' => DocumentType::where('is_active', 1)->get(),
+            'spedId'        => $this->spedId(),
+        ]);
     }
 
+    // ── Store ─────────────────────────────────────────────────────────────────
     public function store(Request $request)
     {
-        $user     = Auth::user();
-        $guardian = $user->guardian;
+        /** @var \App\Models\User|null $authUser */
+        $authUser    = Auth::user();
+        $guardian    = $authUser?->guardian;
+        $currentYear = SchoolYear::current();
 
-        if (!$guardian) {
-            return redirect()->route('portal.dashboard')
-                ->with('error', 'Your guardian profile is not set up yet.');
+        if (!$guardian || !$currentYear) {
+            return redirect()->route('portal.enrollments.index')
+                ->with('error', 'Enrollment is not available at this time.');
         }
 
-        $request->validate([
-            // Student personal info
-            'first_name'       => 'required|string|min:2|max:100',
-            'middle_name'      => 'nullable|string|max:100',
-            'last_name'        => 'required|string|min:2|max:100',
-            'birthdate'        => 'required|date',
-            'sex'              => 'required|in:male,female,others,prefer_not_to_say',
-            'sex_specify'      => 'nullable|string|max:100',
-            // Student address
-            'region'           => 'required|string|max:100',
-            'province'         => 'required|string|max:100',
-            'city'             => 'required|string|max:100',
-            'barangay'         => 'required|string|min:4|max:100',
-            'house_unit_no'    => 'required|string|min:1|max:100',
-            'street'           => 'required|string|min:4|max:100',
-            'zip_code'         => ['required', 'regex:/^\d{4}$/'],
-            // School info
-            'program_level_id' => 'required|exists:program_level,program_level_id',
-            'dev_ped_id'       => 'nullable|exists:developmental_pediatrician,dev_ped_id',
-            'disabilities'     => 'required|array|min:1',
-            'disability_other' => 'nullable|string|max:255',
-            // Enrollment
-            'school_year_id'   => 'required|exists:school_year,school_year_id',
-            'waiver_signed'    => 'accepted',
+        $spedId   = $this->spedId();
+        $isSpED   = (int) $request->service_type_id === $spedId;
+        $isOthers = Disability::find($request->disability_id)?->disability_name === 'Others';
+
+        $validated = $request->validate([
+            'student_first_name'  => 'required|string|min:2|max:50',
+            'student_last_name'   => 'required|string|min:2|max:50',
+            'student_middle_name' => 'nullable|string|max:50',
+            'student_birthdate'   => 'required|date|before:today',
+            'student_sex'         => 'required|in:male,female,others,prefer_not_to_say',
+            'student_sex_specify' => 'nullable|string|max:100',
+            'house_unit_no'       => 'nullable|string|max:100',
+            'street'              => 'nullable|string|min:4|max:100',
+            'barangay'            => 'nullable|string|min:4|max:100',
+            'city'                => 'nullable|string|max:100',
+            'province'            => 'nullable|string|max:100',
+            'region'              => 'nullable|string|max:100',
+            'zip_code'            => ['nullable', 'regex:/^\d{4}$/'],
+            'service_type_id'     => 'required|exists:service_type,service_type_id',
+            'disability_id'       => 'required|exists:disability,disability_id',
+            'disability_other'    => $isOthers
+                ? 'required|string|max:255'
+                : 'nullable|string|max:255',
+            'program_level_id'    => $isSpED
+                ? 'required|exists:program_level,program_level_id'
+                : 'nullable|exists:program_level,program_level_id',
+            'remarks'             => 'nullable|string|max:500',
+            'waiver_signed'       => 'nullable|boolean',
+            'doc_file.*'          => 'nullable|file|max:51200',
+            'doc_notes.*'         => 'nullable|string|max:255',
         ]);
 
-        // Pre-validate file types before creating any records
-        $documentTypes = DocumentType::all();
-        $allowedMimes  = ['application/pdf', 'image/jpeg', 'image/jpg', 'image/png'];
-
-        foreach ($documentTypes as $docType) {
-            $key = "doc_file.{$docType->document_type_id}";
-            if ($request->hasFile($key)) {
-                $mime = strtolower($request->file($key)->getMimeType() ?? '');
-                if (!in_array($mime, $allowedMimes)) {
-                    return back()
-                        ->with('error', "Invalid file type for \"{$docType->document_name}\". Only JPG, PNG, or PDF are accepted.")
-                        ->withInput();
-                }
-            }
-        }
-
-        // Create the student record linked to this guardian
         $student = Student::create([
-            'first_name'       => $request->first_name,
-            'middle_name'      => $request->middle_name,
-            'last_name'        => $request->last_name,
-            'birthdate'        => $request->birthdate,
-            'sex'              => $request->sex,
-            'sex_specify'      => $request->sex === 'others' ? $request->sex_specify : null,
-            'region'           => $request->region,
-            'province'         => $request->province,
-            'city'             => $request->city,
-            'barangay'         => $request->barangay,
-            'house_unit_no'    => $request->house_unit_no,
-            'street'           => $request->street,
-            'zip_code'         => $request->zip_code,
-            'program_level_id' => $request->program_level_id,
-            'dev_ped_id'       => $request->dev_ped_id,
+            'first_name'       => $validated['student_first_name'],
+            'last_name'        => $validated['student_last_name'],
+            'middle_name'      => $validated['student_middle_name'] ?? null,
+            'birthdate'        => $validated['student_birthdate'],
+            'sex'              => $validated['student_sex'],
+            'sex_specify'      => $validated['student_sex_specify'] ?? null,
+            'house_unit_no'    => $validated['house_unit_no'] ?? null,
+            'street'           => $validated['street'] ?? null,
+            'barangay'         => $validated['barangay'] ?? null,
+            'city'             => $validated['city'] ?? null,
+            'province'         => $validated['province'] ?? null,
+            'region'           => $validated['region'] ?? null,
+            'zip_code'         => $validated['zip_code'] ?? null,
             'guardian_id'      => $guardian->guardian_id,
+            'service_type_id'  => $validated['service_type_id'],
+            'disability_id'    => $validated['disability_id'],
+            'disability_other' => $isOthers ? ($validated['disability_other'] ?? null) : null,
+            'program_level_id' => $isSpED ? ($validated['program_level_id'] ?? null) : null,
             'status'           => 'active',
-            'disability_other' => $request->disability_other,
         ]);
 
-        $student->disabilities()->sync($request->input('disabilities', []));
-
-        // Create enrollment
         $enrollment = Enrollment::create([
             'student_id'       => $student->student_id,
-            'school_year_id'   => $request->school_year_id,
-            'program_level_id' => $student->program_level_id,
+            'school_year_id'   => $currentYear->school_year_id,
+            'program_level_id' => $isSpED ? ($validated['program_level_id'] ?? null) : null,
             'enrollment_date'  => now()->toDateString(),
             'enrollment_type'  => 'online',
             'status'           => 'pending',
-            'waiver_signed'    => true,
+            'remarks'          => $validated['remarks'] ?? null,
+            'waiver_signed'    => $request->boolean('waiver_signed'),
             'processed_by'     => null,
         ]);
 
-        // Store document files
-        foreach ($documentTypes as $docType) {
-            $filePath         = null;
-            $submissionStatus = 'pending';
-            $key              = "doc_file.{$docType->document_type_id}";
+        $docTypes = DocumentType::where('is_active', 1)->get();
+        foreach ($docTypes as $docType) {
+            $id   = $docType->document_type_id;
+            $path = null;
 
-            if ($request->hasFile($key)) {
-                $filePath = $request->file($key)
-                    ->store("enrollment_docs/{$enrollment->enrollment_id}", 'public');
-                $submissionStatus = 'submitted';
+            if ($request->hasFile("doc_file.{$id}")) {
+                $path = $request->file("doc_file.{$id}")
+                    ->store('enrollment_documents', 'public');
             }
 
             EnrollmentDocument::create([
-                'enrollment_id'     => $enrollment->enrollment_id,
-                'document_type_id'  => $docType->document_type_id,
-                'submission_status' => $submissionStatus,
-                'file_path'         => $filePath,
-                'submission_date'   => $filePath ? now()->toDateString() : null,
+                'enrollment_id'    => $enrollment->enrollment_id,
+                'document_type_id' => $id,
+                'file_path'        => $path,
+                'submission_status' => $path ? 'pending' : 'missing',
+                'notes'            => $request->input("doc_notes.{$id}"),
             ]);
         }
 
-        AuditLog::create([
-            'user_id'    => $user->user_id,
-            'action'     => 'CREATE',
-            'table_name' => 'enrollment',
-            'record_id'  => $enrollment->enrollment_id,
-            'changes'    => json_encode([
-                'type'    => 'online',
-                'student' => $student->full_name,
-            ]),
-        ]);
-
-        return redirect()->route('portal.enrollments.show', $enrollment->enrollment_id)
-            ->with('success', 'Your enrollment has been submitted successfully! Please wait for our internals to review your application.');
+        return redirect()
+            ->route('portal.enrollments.show', $enrollment->enrollment_id)
+            ->with(
+                'success',
+                'Your enrollment has been submitted successfully! ' .
+                    'Please wait for our staff to review your application.'
+            );
     }
 
+    // ── Show ──────────────────────────────────────────────────────────────────
     public function show($id)
     {
-        $user       = Auth::user();
-        $guardian   = $user->guardian;
-        $studentIds = $guardian?->students->pluck('student_id')->toArray() ?? [];
+        /** @var \App\Models\User|null $authUser */
+        $authUser = Auth::user();
+        $guardian = $authUser?->guardian;
 
         $enrollment = Enrollment::with([
             'student',
@@ -202,7 +194,7 @@ class EnrollmentController extends Controller
             'documents.documentType',
         ])->findOrFail($id);
 
-        if (!in_array($enrollment->student_id, $studentIds)) {
+        if ($enrollment->student?->guardian_id !== $guardian?->guardian_id) {
             abort(403);
         }
 

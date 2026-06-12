@@ -28,18 +28,12 @@
                 </select>
             </div>
             <div class="col-md-2">
-                <select id="programFilter" class="form-select form-select-sm">
-                    <option value="">All Programs</option>
-                    @foreach($programLevels as $pl)
-                        <option value="{{ $pl->program_level_id }}">{{ $pl->program_name }}</option>
-                    @endforeach
-                </select>
-            </div>
-            <div class="col-md-2">
-                <select id="disabilityFilter" class="form-select form-select-sm">
-                    <option value="">All Disabilities</option>
-                    @foreach($disabilities as $d)
-                        <option value="{{ $d->disability_id }}">{{ $d->disability_name }}</option>
+                <select id="serviceFilter" class="form-select form-select-sm">
+                    <option value="">All Services</option>
+                    @foreach($serviceTypes as $st)
+                        <option value="{{ $st->service_type_id }}">
+                            {{ $st->service_name }}
+                        </option>
                     @endforeach
                 </select>
             </div>
@@ -54,7 +48,7 @@
             </div>
             <div class="col-md-1">
                 <button class="btn btn-sm btn-outline-secondary w-100"
-                        onclick="clearFilters()" title="Clear">
+                        onclick="clearFilters()" title="Clear Filters">
                     <i class="bi bi-x-circle"></i>
                 </button>
             </div>
@@ -70,8 +64,7 @@
                     <th>#</th>
                     <th>Full Name</th>
                     <th>Guardian</th>
-                    <th>Program</th>
-                    <th>Disabilities</th>
+                    <th>Service Type</th>
                     <th>Status</th>
                     <th>Actions</th>
                 </tr>
@@ -92,8 +85,9 @@
 
                 @if($students->isEmpty())
                     <tr id="noDataRow">
-                        <td colspan="7" class="text-center text-muted py-4">
-                            <i class="bi bi-mortarboard d-block mb-2" style="font-size:1.5rem;"></i>
+                        <td colspan="6" class="text-center text-muted py-4">
+                            <i class="bi bi-mortarboard d-block mb-2"
+                               style="font-size:1.5rem;"></i>
                             No students found.
                         </td>
                     </tr>
@@ -103,8 +97,9 @@
                     @if($group['students']->isNotEmpty())
                         <tr class="category-header {{ $group['class'] }}"
                             data-category="{{ $group['key'] }}">
-                            <td colspan="7" class="py-2 px-3 fw-semibold small">
-                                <i class="bi {{ $group['icon'] }} me-1"></i>{{ $group['label'] }}
+                            <td colspan="6" class="py-2 px-3 fw-semibold small">
+                                <i class="bi {{ $group['icon'] }} me-1"></i>
+                                {{ $group['label'] }}
                             </td>
                         </tr>
                         @foreach($group['students'] as $student)
@@ -115,40 +110,43 @@
                                     'withdrawn' => 'warning',
                                     'completed' => 'primary',
                                 ];
-                                
-                                $isLocked = in_array($student->student_id, $lockedStudentIds ?? []);
-
+                                $isLocked     = in_array($student->student_id, $lockedStudentIds ?? []);
                                 $guardianName = optional($student->guardian?->user)->full_name ?? '—';
                             @endphp
                             <tr data-name="{{ strtolower($student->last_name) }}"
                                 data-created="{{ $student->created_at?->timestamp ?? 0 }}"
                                 data-modified="{{ $student->updated_at?->timestamp ?? 0 }}"
-                                data-program="{{ $student->program_level_id }}"
+                                data-service="{{ $student->service_type_id }}"
                                 data-status="{{ $student->status }}"
-                                data-disabilities="{{ $student->disabilities->pluck('disability_id')->implode(',') }}"
                                 data-search="{{ strtolower($student->list_name . ' ' . $guardianName) }}">
                                 <td>{{ $student->student_id }}</td>
                                 <td>
                                     <div class="d-flex align-items-center gap-2">
-                                        @include('partials.avatar',[
+                                        @include('partials.avatar', [
                                             'name'  => $student->list_name,
                                             'image' => $student->profile_picture,
                                             'size'  => 32,
                                         ])
-                                        <span>{{ $student->list_name }}</span>
+                                        <div>
+                                            <div>{{ $student->list_name }}</div>
+                                            @if($isLocked)
+                                                <small class="text-warning">
+                                                    <i class="bi bi-lock-fill me-1"></i>
+                                                    Pending online enrollment
+                                                </small>
+                                            @endif
+                                        </div>
                                     </div>
                                 </td>
-
-                                {{-- Concern 1 fix --}}
                                 <td>{{ $guardianName }}</td>
-
-                                <td>{{ optional($student->programLevel)->program_name ?? '—' }}</td>
                                 <td>
-                                    @foreach($student->disabilities as $d)
+                                    @if($student->serviceType)
                                         <span class="badge bg-info text-dark">
-                                            {{ $d->disability_name }}
+                                            {{ $student->serviceType->service_name }}
                                         </span>
-                                    @endforeach
+                                    @else
+                                        <span class="text-muted">—</span>
+                                    @endif
                                 </td>
                                 <td>
                                     <span class="badge bg-{{ $sc[$student->status] ?? 'secondary' }}">
@@ -158,7 +156,7 @@
                                 <td>
                                     <div class="d-flex align-items-center gap-1">
                                         @if(Auth::user()->hasPermission('view_student'))
-                                            <a href="{{ route('admin.students.show',$student->student_id) }}"
+                                            <a href="{{ route('admin.students.show', $student->student_id) }}"
                                                class="btn btn-sm btn-outline-info" title="View">
                                                 <i class="bi bi-eye"></i>
                                             </a>
@@ -166,13 +164,12 @@
 
                                         @if(Auth::user()->hasPermission('edit_student'))
                                             @if($isLocked)
-                                                {{-- Concern 2: locked — pending digital enrollment --}}
                                                 <span class="btn btn-sm btn-outline-secondary disabled"
                                                       title="Cannot edit — digital enrollment pending review">
                                                     <i class="bi bi-lock-fill"></i>
                                                 </span>
                                             @else
-                                                <a href="{{ route('admin.students.edit',$student->student_id) }}"
+                                                <a href="{{ route('admin.students.edit', $student->student_id) }}"
                                                    class="btn btn-sm btn-outline-primary" title="Edit">
                                                     <i class="bi bi-pencil"></i>
                                                 </a>
@@ -181,9 +178,9 @@
 
                                         @if(Auth::user()->hasPermission('delete_student'))
                                             <button class="btn btn-sm btn-outline-danger" title="Delete"
-                                                    data-id="{{ $student->student_id }}"
                                                     data-name="{{ $student->list_name }}"
-                                                    onclick="confirmDelete(this.dataset.id,this.dataset.name)">
+                                                    data-url="{{ route('admin.students.destroy', ['id' => $student->student_id]) }}"
+                                                    onclick="confirmDelete(this.dataset.url, this.dataset.name)">
                                                 <i class="bi bi-trash"></i>
                                             </button>
                                         @endif
@@ -192,7 +189,8 @@
                             </tr>
                         @endforeach
                         <tr class="category-spacer">
-                            <td colspan="7" style="height:10px;border:none;padding:0;"></td>
+                            <td colspan="6"
+                                style="height:10px;border:none;padding:0;"></td>
                         </tr>
                     @endif
                 @endforeach
@@ -219,7 +217,9 @@
                 <strong id="deleteStudentName"></strong>?
             </div>
             <div class="modal-footer border-0 pt-0">
-                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                <button class="btn btn-sm btn-secondary" data-bs-dismiss="modal">
+                    Cancel
+                </button>
                 <form id="deleteForm" method="POST" class="d-inline">
                     @csrf
                     @method('DELETE')
@@ -233,25 +233,23 @@
 </div>
 
 <script>
-var searchInput      = document.getElementById('searchInput');
-var sortSelect       = document.getElementById('sortSelect');
-var programFilter    = document.getElementById('programFilter');
-var disabilityFilter = document.getElementById('disabilityFilter');
-var statusFilter     = document.getElementById('statusFilter');
-var tbody            = document.querySelector('#studentsTable tbody');
+var searchInput   = document.getElementById('searchInput');
+var sortSelect    = document.getElementById('sortSelect');
+var serviceFilter = document.getElementById('serviceFilter');
+var statusFilter  = document.getElementById('statusFilter');
+var tbody         = document.querySelector('#studentsTable tbody');
 
 Array.from(tbody.querySelectorAll('tr')).forEach(function (el, i) {
     el.dataset.originalOrder = i;
 });
 
 function applyFilters() {
-    var search     = searchInput.value.toLowerCase().trim();
-    var sort       = sortSelect.value;
-    var program    = programFilter.value;
-    var disability = disabilityFilter.value;
-    var status     = statusFilter.value;
-    var hasFilter  = search !== '' || program !== '' || disability !== ''
-                     || status !== '' || sort !== 'default';
+    var search    = searchInput.value.toLowerCase().trim();
+    var sort      = sortSelect.value;
+    var service   = serviceFilter.value;
+    var status    = statusFilter.value;
+    var hasFilter = search !== '' || service !== '' || status !== ''
+                    || sort !== 'default';
 
     var categoryHeaders = Array.from(tbody.querySelectorAll('tr.category-header'));
     var categorySpacers = Array.from(tbody.querySelectorAll('tr.category-spacer'));
@@ -277,42 +275,42 @@ function applyFilters() {
 
     dataRows.forEach(function (row) {
         var show = true;
-        if (search     && !(row.dataset.search || '').includes(search))          { show = false; }
-        if (program    && row.dataset.program !== program)                        { show = false; }
-        if (status     && row.dataset.status  !== status)                         { show = false; }
-        if (disability && !row.dataset.disabilities.split(',').includes(disability)) { show = false; }
+        if (search  && !(row.dataset.search  || '').includes(search))  { show = false; }
+        if (service && row.dataset.service   !== service)               { show = false; }
+        if (status  && row.dataset.status    !== status)                { show = false; }
         row.style.display = show ? '' : 'none';
     });
 
-    var visible = dataRows.filter(function (r) { return r.style.display !== 'none'; });
+    var visible = dataRows.filter(function (r) {
+        return r.style.display !== 'none';
+    });
     noResultsDiv.style.display = (visible.length === 0) ? '' : 'none';
 
     visible.sort(function (a, b) {
         if (sort === 'az')       return (a.dataset.name || '').localeCompare(b.dataset.name || '');
         if (sort === 'za')       return (b.dataset.name || '').localeCompare(a.dataset.name || '');
-        if (sort === 'created')  return (b.dataset.created  || 0) - (a.dataset.created  || 0);
-        if (sort === 'modified') return (b.dataset.modified || 0) - (a.dataset.modified || 0);
+        if (sort === 'created')  return parseInt(b.dataset.created  || 0) - parseInt(a.dataset.created  || 0);
+        if (sort === 'modified') return parseInt(b.dataset.modified || 0) - parseInt(a.dataset.modified || 0);
         return 0;
     });
     visible.forEach(function (r) { tbody.appendChild(r); });
 }
 
 function clearFilters() {
-    searchInput.value      = '';
-    sortSelect.value       = 'default';
-    programFilter.value    = '';
-    disabilityFilter.value = '';
-    statusFilter.value     = '';
+    searchInput.value   = '';
+    sortSelect.value    = 'default';
+    serviceFilter.value = '';
+    statusFilter.value  = '';
     applyFilters();
 }
 
-function confirmDelete(id, name) {
+function confirmDelete(url, name) {
     document.getElementById('deleteStudentName').textContent = name;
-    document.getElementById('deleteForm').action = '/admin/students/' + id;
+    document.getElementById('deleteForm').action = url;
     new bootstrap.Modal(document.getElementById('deleteModal')).show();
 }
 
-[searchInput, sortSelect, programFilter, disabilityFilter, statusFilter].forEach(function (el) {
+[searchInput, sortSelect, serviceFilter, statusFilter].forEach(function (el) {
     el.addEventListener('input', applyFilters);
 });
 

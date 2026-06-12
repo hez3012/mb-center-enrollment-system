@@ -3,151 +3,180 @@
 namespace App\Http\Controllers\Admin;
 
 use App\Http\Controllers\Controller;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Auth;
-use Illuminate\Support\Facades\Storage;
 use App\Models\Enrollment;
 use App\Models\EnrollmentDocument;
 use App\Models\Student;
 use App\Models\SchoolYear;
 use App\Models\ProgramLevel;
 use App\Models\DocumentType;
+use App\Models\ServiceType;
 use App\Models\AuditLog;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\Auth;
 
 class EnrollmentController extends Controller
 {
-    public function index()
+    // ── Helper ────────────────────────────────────────────────────────────────
+    private function spedId(): int
     {
-        $enrollments = Enrollment::with([
-            'student',
-            'schoolYear',
-            'programLevel',
-            'processedBy',
-        ])->orderByDesc('created_at')->get();
-
-        $schoolYears   = SchoolYear::orderByDesc('start_date')->get();
-        $programLevels = ProgramLevel::all();
-
-        return view('admin.enrollments.index', compact(
-            'enrollments',
-            'schoolYears',
-            'programLevels'
-        ));
+        $match = ServiceType::all()->first(function ($st) {
+            return stripos($st->service_name, 'sped') !== false
+                || stripos($st->service_name, 'special education') !== false;
+        });
+        return (int) $match?->service_type_id;
     }
 
+    // ── Index ─────────────────────────────────────────────────────────────────
+    public function index(Request $request)
+    {
+        $query = Enrollment::with([
+            'student.serviceType',
+            'student.guardian.user',
+            'schoolYear',
+            'programLevel',
+        ])->latest();
+
+        if ($request->filled('search')) {
+            $s = $request->search;
+            $query->whereHas('student', function ($q) use ($s) {
+                $q->where('first_name', 'like', "%{$s}%")
+                    ->orWhere('last_name',  'like', "%{$s}%");
+            });
+        }
+
+        if ($request->filled('status')) {
+            $query->where('status', $request->status);
+        }
+
+        if ($request->filled('school_year')) {
+            $query->where('school_year_id', $request->school_year);
+        }
+
+        $enrollments = $query->paginate(15)->withQueryString();
+        $schoolYears = SchoolYear::all();
+
+        return view('admin.enrollments.index', compact('enrollments', 'schoolYears'));
+    }
+
+    // ── Create ────────────────────────────────────────────────────────────────
     public function create()
     {
         $currentYear = SchoolYear::current();
 
-        // Exclude students already enrolled in the current school year
-        $enrolledIds = [];
-        if ($currentYear) {
-            $enrolledIds = Enrollment::where('school_year_id', $currentYear->school_year_id)
-                ->whereNull('deleted_at')
-                ->pluck('student_id')
-                ->toArray();
+        if (!$currentYear) {
+            return redirect()->route('admin.enrollments.index')
+                ->with('error', 'No active school year found.');
         }
 
-        $students = Student::with('programLevel')
-            ->where('status', 'active')
-            ->whereNotIn('student_id', $enrolledIds)
+        $enrolledStudentIds = Enrollment::where('school_year_id', $currentYear->school_year_id)
+            ->whereNotIn('status', ['withdrawn', 'rejected'])
+            ->pluck('student_id')
+            ->toArray();
+
+        $students      = Student::with('serviceType')
+            ->whereNotIn('student_id', $enrolledStudentIds)
+            ->orderBy('last_name')
             ->get();
 
-        $schoolYears   = SchoolYear::orderByDesc('start_date')->get();
         $programLevels = ProgramLevel::all();
-
-        // Filter out inactive document types (e.g. Parent/Guardian Waiver)
         $documentTypes = DocumentType::where('is_active', 1)->get();
+        $schoolYears   = SchoolYear::all();
+        $spedId        = $this->spedId();
 
         return view('admin.enrollments.create', compact(
             'students',
-            'schoolYears',
             'programLevels',
             'documentTypes',
-            'currentYear'
+            'schoolYears',
+            'currentYear',
+            'spedId'
         ));
     }
 
+    // ── Store ─────────────────────────────────────────────────────────────────
     public function store(Request $request)
     {
-        $request->validate([
+        $student = Student::find($request->student_id);
+        $isSpED  = $student && (int) $student->service_type_id === $this->spedId();
+
+        $validated = $request->validate([
             'student_id'       => 'required|exists:student,student_id',
             'school_year_id'   => 'required|exists:school_year,school_year_id',
-            'program_level_id' => 'required|exists:program_level,program_level_id',
+            'program_level_id' => $isSpED
+                ? 'required|exists:program_level,program_level_id'
+                : 'nullable|exists:program_level,program_level_id',
             'enrollment_date'  => 'required|date',
-            'status'           => 'required|in:pending,pending_payment,payment_confirmed,enrolled,rejected,withdrawn',
-            'waiver_signed'    => 'boolean',
-            'remarks'          => 'nullable|string',
-            'doc_status.*'     => 'nullable|in:submitted,pending,missing',
-            'doc_file.*'       => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'doc_notes.*'      => 'nullable|string',
+            'status'           => 'required|in:pending,pending_payment,enrolled,rejected,withdrawn,completed',
+            'remarks'          => 'nullable|string|max:500',
+            'rejection_reason' => 'nullable|string|max:500',
+            'waiver_signed'    => 'nullable|boolean',
+            'doc_file.*'       => 'nullable|file|max:51200',
+            'doc_status.*'     => 'nullable|in:pending,submitted,missing',
+            'doc_notes.*'      => 'nullable|string|max:255',
         ]);
 
-        // Prevent duplicate enrollment for same student + school year
-        $duplicate = Enrollment::where('student_id', $request->student_id)
-            ->where('school_year_id', $request->school_year_id)
-            ->whereNotIn('status', ['rejected', 'withdrawn'])
-            ->whereNull('deleted_at')
-            ->exists();
-
-        if ($duplicate) {
-            return back()
-                ->with('error', 'This student is already enrolled for the selected school year.')
-                ->withInput();
+        if (!$isSpED) {
+            $validated['program_level_id'] = null;
         }
 
         $enrollment = Enrollment::create([
-            'student_id'       => $request->student_id,
-            'school_year_id'   => $request->school_year_id,
-            'program_level_id' => $request->program_level_id,
-            'enrollment_date'  => $request->enrollment_date,
+            'student_id'       => $validated['student_id'],
+            'school_year_id'   => $validated['school_year_id'],
+            'program_level_id' => $validated['program_level_id'] ?? null,
+            'enrollment_date'  => $validated['enrollment_date'],
             'enrollment_type'  => 'walk_in',
-            'status'           => $request->status,
+            'status'           => $validated['status'],
+            'remarks'          => $validated['remarks'] ?? null,
+            'rejection_reason' => $validated['rejection_reason'] ?? null,
             'waiver_signed'    => $request->boolean('waiver_signed'),
-            'remarks'          => $request->remarks,
-            'processed_by'     => Auth::user()->user_id,
+            'processed_by'     => Auth::id(),
         ]);
 
-        // Save document checklist
-        if ($request->has('doc_status')) {
-            foreach ($request->doc_status as $docTypeId => $status) {
-                $filePath = null;
-                if ($request->hasFile("doc_file.{$docTypeId}")) {
-                    $filePath = $request->file("doc_file.{$docTypeId}")
-                        ->store("enrollment_docs/{$enrollment->enrollment_id}", 'public');
-                }
+        $docTypes = DocumentType::where('is_active', 1)->get();
+        foreach ($docTypes as $docType) {
+            $id     = $docType->document_type_id;
+            $status = $request->input("doc_status.{$id}", 'missing');
+            $path   = null;
 
-                EnrollmentDocument::create([
-                    'enrollment_id'     => $enrollment->enrollment_id,
-                    'document_type_id'  => $docTypeId,
-                    'submission_status' => $status ?? 'pending',
-                    'file_path'         => $filePath,
-                    'submission_date'   => ($status === 'submitted') ? now()->toDateString() : null,
-                    'notes'             => $request->input("doc_notes.{$docTypeId}"),
-                ]);
+            if ($request->hasFile("doc_file.{$id}")) {
+                $path   = $request->file("doc_file.{$id}")
+                    ->store('enrollment_documents', 'public');
+                $status = in_array($status, ['pending', 'submitted'])
+                    ? $status : 'pending';
             }
+
+            EnrollmentDocument::create([
+                'enrollment_id'    => $enrollment->enrollment_id,
+                'document_type_id' => $id,
+                'file_path'        => $path,
+                'submission_status' => $path ? $status : 'missing',
+                'notes'            => $request->input("doc_notes.{$id}"),
+            ]);
         }
 
         AuditLog::create([
-            'user_id'    => Auth::user()->user_id,
-            'action'     => 'CREATE',
-            'table_name' => 'enrollment',
-            'record_id'  => $enrollment->enrollment_id,
-            'changes'    => json_encode([
-                'student'     => $enrollment->student->full_name ?? '',
-                'school_year' => $enrollment->schoolYear->year_label ?? '',
-            ]),
+            'action'       => 'create',
+            'table_name'   => 'enrollment',
+            'record_id'    => $enrollment->enrollment_id,
+            'description'  => 'Created walk-in enrollment for student ID ' . $validated['student_id'],
+            'user_id'      => Auth::id(),
+            'performed_at' => now(),
         ]);
 
-        return redirect()->route('admin.enrollments.show', $enrollment->enrollment_id)
-            ->with('success', 'Enrollment created successfully.');
+        return redirect()
+            ->route('admin.enrollments.show', $enrollment->enrollment_id)
+            ->with('success', 'Walk-in enrollment created successfully.');
     }
 
+    // ── Show ──────────────────────────────────────────────────────────────────
     public function show($id)
     {
         $enrollment = Enrollment::with([
             'student.guardian.user',
-            'student.disabilities',
+            'student.serviceType',
+            'student.disability',
+            'student.programLevel',
             'schoolYear',
             'programLevel',
             'processedBy',
@@ -155,205 +184,211 @@ class EnrollmentController extends Controller
             'payment.recordedBy',
         ])->findOrFail($id);
 
-        // Pre-compute blocking docs for walk-in payment gate
-        $blockingDocs = [];
-        if ($enrollment->status === 'pending_payment'
-            && $enrollment->enrollment_type === 'walk_in') {
-            $requiredTypes = DocumentType::where('is_required', true)
-                ->where('is_active', 1)
-                ->get();
-            foreach ($requiredTypes as $docType) {
-                $doc = $enrollment->documents
-                    ->where('document_type_id', $docType->document_type_id)
-                    ->first();
-                if (!$doc || $doc->submission_status !== 'submitted') {
-                    $blockingDocs[] = $docType->document_name;
-                }
-            }
-        }
+        $blockingDocs = $enrollment->documents->filter(function ($doc) {
+            return $doc->documentType?->is_required
+                && $doc->documentType?->is_active
+                && $doc->submission_status !== 'submitted';
+        });
 
         return view('admin.enrollments.show', compact('enrollment', 'blockingDocs'));
     }
 
+    // ── Edit ──────────────────────────────────────────────────────────────────
     public function edit($id)
     {
-        $enrollment = Enrollment::with([
-            'documents.documentType',
-            'payment',
-        ])->findOrFail($id);
-
-        $schoolYears   = SchoolYear::orderByDesc('start_date')->get();
-        $programLevels = ProgramLevel::all();
-
-        // Filter out inactive document types
-        $documentTypes = DocumentType::where('is_active', 1)->get();
-
-        return view('admin.enrollments.edit', compact(
-            'enrollment',
-            'schoolYears',
-            'programLevels',
-            'documentTypes'
-        ));
-    }
-
-    public function update(Request $request, $id)
-    {
-        $enrollment = Enrollment::with('payment')->findOrFail($id);
-        $hasPayment = $enrollment->payment !== null;
-
-        // Determine allowed statuses based on payment state and current status
-        if ($enrollment->status === 'pending') {
-            // Online pending — locked, only allow "pending" through unchanged
-            $allowedStatuses = ['pending'];
-        } elseif ($hasPayment) {
-            // After payment — can only move to enrolled/withdrawn/completed
-            $allowedStatuses = ['enrolled', 'withdrawn', 'completed'];
-        } else {
-            // Before payment — can only move to pending_payment/rejected/withdrawn
-            $allowedStatuses = ['pending_payment', 'rejected', 'withdrawn'];
+        $enrollment = Enrollment::findOrFail($id);
+        if ($enrollment->status === 'pending' && $enrollment->enrollment_type === 'online') {
+            return redirect()
+                ->route('admin.enrollments.show', $enrollment->enrollment_id)
+                ->with(
+                    'error',
+                    'Use the Approve / Reject buttons for pending online enrollments.'
+                );
         }
 
-        $request->validate([
-            'program_level_id' => 'required|exists:program_level,program_level_id',
-            'enrollment_date'  => 'required|date',
-            'status'           => ['required', 'in:' . implode(',', $allowedStatuses)],
-            'waiver_signed'    => 'boolean',
-            'rejection_reason' => 'nullable|string',
-            'remarks'          => 'nullable|string',
-            'doc_status.*'     => 'nullable|in:submitted,pending,missing',
-            'doc_file.*'       => 'nullable|file|mimes:pdf,jpg,jpeg,png|max:5120',
-            'doc_notes.*'      => 'nullable|string',
+        $enrollment->load(['documents.documentType', 'payment', 'student.serviceType']);
+
+        return view('admin.enrollments.edit', [
+            'enrollment'    => $enrollment,
+            'programLevels' => ProgramLevel::all(),
+            'documentTypes' => DocumentType::where('is_active', 1)->get(),
+            'spedId'        => $this->spedId(),
         ]);
+    }
+
+    // ── Update ────────────────────────────────────────────────────────────────
+    public function update(Request $request, $id)
+    {
+        $enrollment = Enrollment::with(['payment', 'documents', 'student.serviceType'])
+            ->findOrFail($id);
+        $hasPayment = $enrollment->payment !== null;
+        $isSpED     = (int) $enrollment->student?->service_type_id === $this->spedId();
+
+        $allowedStatuses = $hasPayment
+            ? ['enrolled', 'withdrawn', 'completed']
+            : ($enrollment->status === 'pending' && $enrollment->enrollment_type === 'online'
+                ? ['pending']
+                : ['pending', 'pending_payment', 'rejected', 'withdrawn']);
+
+        $validated = $request->validate([
+            'program_level_id' => $isSpED
+                ? 'required|exists:program_level,program_level_id'
+                : 'nullable|exists:program_level,program_level_id',
+            'enrollment_date'  => 'required|date',
+            'status'           => 'required|in:' . implode(',', $allowedStatuses),
+            'remarks'          => 'nullable|string|max:500',
+            'rejection_reason' => 'nullable|string|max:500',
+            'waiver_signed'    => 'nullable|boolean',
+            'doc_file.*'       => 'nullable|file|max:51200',
+            'doc_status.*'     => 'nullable|in:pending,submitted,missing',
+            'doc_notes.*'      => 'nullable|string|max:255',
+        ]);
+
+        if (!$isSpED) {
+            $validated['program_level_id'] = null;
+        }
 
         $enrollment->update([
-            'program_level_id' => $request->program_level_id,
-            'enrollment_date'  => $request->enrollment_date,
-            'status'           => $request->status,
+            'program_level_id' => $validated['program_level_id'] ?? null,
+            'enrollment_date'  => $validated['enrollment_date'],
+            'status'           => $validated['status'],
+            'remarks'          => $validated['remarks'] ?? null,
+            'rejection_reason' => $validated['rejection_reason'] ?? null,
             'waiver_signed'    => $request->boolean('waiver_signed'),
-            'rejection_reason' => $request->rejection_reason,
-            'remarks'          => $request->remarks,
-            'processed_by'     => Auth::user()->user_id,
         ]);
 
-        // Update document statuses
-        if ($request->has('doc_status')) {
-            foreach ($request->doc_status as $docTypeId => $status) {
-                $doc      = EnrollmentDocument::where('enrollment_id', $enrollment->enrollment_id)
-                    ->where('document_type_id', $docTypeId)->first();
-                $filePath = $doc?->file_path;
+        $docTypes = DocumentType::where('is_active', 1)->get();
+        foreach ($docTypes as $docType) {
+            $id  = $docType->document_type_id;
+            $doc = $enrollment->documents
+                ->where('document_type_id', $id)
+                ->first();
 
-                if ($request->hasFile("doc_file.{$docTypeId}")) {
-                    if ($filePath) Storage::disk('public')->delete($filePath);
-                    $filePath = $request->file("doc_file.{$docTypeId}")
-                        ->store("enrollment_docs/{$enrollment->enrollment_id}", 'public');
+            $status = $request->input("doc_status.{$id}");
+            $path   = $doc?->file_path;
+
+            if ($request->hasFile("doc_file.{$id}")) {
+                if ($path) {
+                    Storage::disk('public')->delete($path);
                 }
-
-                EnrollmentDocument::updateOrCreate(
-                    [
-                        'enrollment_id'    => $enrollment->enrollment_id,
-                        'document_type_id' => $docTypeId,
-                    ],
-                    [
-                        'submission_status' => $status ?? 'pending',
-                        'file_path'         => $filePath,
-                        'submission_date'   => ($status === 'submitted')
-                            ? ($doc?->submission_date ?? now()->toDateString())
-                            : null,
-                        'notes' => $request->input("doc_notes.{$docTypeId}"),
-                    ]
-                );
+                $path   = $request->file("doc_file.{$id}")
+                    ->store('enrollment_documents', 'public');
+                $status = in_array($status, ['pending', 'submitted'])
+                    ? $status : 'pending';
             }
+
+            $docData = [
+                'file_path'         => $path,
+                'submission_status' => $path ? ($status ?? 'pending') : 'missing',
+                'notes'             => $request->input("doc_notes.{$id}"),
+            ];
+
+            $doc
+                ? $doc->update($docData)
+                : EnrollmentDocument::create(array_merge($docData, [
+                    'enrollment_id'    => $enrollment->enrollment_id,
+                    'document_type_id' => $id,
+                ]));
         }
 
         AuditLog::create([
-            'user_id'    => Auth::user()->user_id,
-            'action'     => 'UPDATE',
-            'table_name' => 'enrollment',
-            'record_id'  => $enrollment->enrollment_id,
-            'changes'    => json_encode(['status' => $enrollment->status]),
+            'action'       => 'update',
+            'table_name'   => 'enrollment',
+            'record_id'    => $enrollment->enrollment_id,
+            'description'  => 'Updated enrollment ID ' . $enrollment->enrollment_id,
+            'user_id'      => Auth::id(),
+            'performed_at' => now(),
         ]);
 
-        return redirect()->route('admin.enrollments.show', $enrollment->enrollment_id)
+        return redirect()
+            ->route('admin.enrollments.show', $enrollment->enrollment_id)
             ->with('success', 'Enrollment updated successfully.');
     }
 
+    // ── Approve ───────────────────────────────────────────────────────────────
     public function approve($id)
     {
         $enrollment = Enrollment::findOrFail($id);
-
         if ($enrollment->status !== 'pending') {
             return back()->with('error', 'Only pending enrollments can be approved.');
         }
 
+        // For online enrollments, auto-mark all docs as submitted on approval
+        if ($enrollment->enrollment_type === 'online') {
+            $enrollment->documents()->update(['submission_status' => 'submitted']);
+        }
+
         $enrollment->update([
             'status'       => 'pending_payment',
-            'processed_by' => Auth::user()->user_id,
+            'processed_by' => Auth::id(),
         ]);
 
         AuditLog::create([
-            'user_id'    => Auth::user()->user_id,
-            'action'     => 'UPDATE',
-            'table_name' => 'enrollment',
-            'record_id'  => $enrollment->enrollment_id,
-            'changes'    => json_encode(['action' => 'approved', 'status' => 'pending_payment']),
+            'action'       => 'approve',
+            'table_name'   => 'enrollment',
+            'record_id'    => $enrollment->enrollment_id,
+            'description'  => 'Approved enrollment ID ' . $enrollment->enrollment_id,
+            'user_id'      => Auth::id(),
+            'performed_at' => now(),
         ]);
 
-        return back()->with('success', 'Enrollment approved. Student is now pending payment.');
+        return back()->with('success', 'Enrollment approved. Status set to Pending Payment.');
     }
 
+    // ── Reject ────────────────────────────────────────────────────────────────
     public function reject(Request $request, $id)
     {
-        $request->validate([
-            'rejection_reason' => 'required|string|max:500',
-        ]);
-
         $enrollment = Enrollment::findOrFail($id);
-
         if ($enrollment->status !== 'pending') {
             return back()->with('error', 'Only pending enrollments can be rejected.');
         }
 
+        $request->validate([
+            'rejection_reason' => 'required|string|max:500',
+        ]);
+
         $enrollment->update([
             'status'           => 'rejected',
             'rejection_reason' => $request->rejection_reason,
-            'processed_by'     => Auth::user()->user_id,
+            'processed_by'     => Auth::id(),
         ]);
 
         AuditLog::create([
-            'user_id'    => Auth::user()->user_id,
-            'action'     => 'UPDATE',
-            'table_name' => 'enrollment',
-            'record_id'  => $enrollment->enrollment_id,
-            'changes'    => json_encode([
-                'action' => 'rejected',
-                'reason' => $request->rejection_reason,
-            ]),
+            'action'       => 'reject',
+            'table_name'   => 'enrollment',
+            'record_id'    => $enrollment->enrollment_id,
+            'description'  => 'Rejected enrollment ID ' . $enrollment->enrollment_id,
+            'user_id'      => Auth::id(),
+            'performed_at' => now(),
         ]);
 
-        return back()->with('success', 'Enrollment rejected.');
+        return back()->with('success', 'Enrollment has been rejected.');
     }
 
+    // ── Destroy ───────────────────────────────────────────────────────────────
     public function destroy($id)
     {
         $enrollment = Enrollment::findOrFail($id);
-
-        foreach ($enrollment->documents as $doc) {
-            if ($doc->file_path) {
-                Storage::disk('public')->delete($doc->file_path);
-            }
+        if ($enrollment->payment) {
+            return back()->with(
+                'error',
+                'Cannot delete an enrollment with a recorded payment.'
+            );
         }
 
+        $id = $enrollment->enrollment_id;
         $enrollment->delete();
 
         AuditLog::create([
-            'user_id'    => Auth::user()->user_id,
-            'action'     => 'DELETE',
-            'table_name' => 'enrollment',
-            'record_id'  => $id,
-            'changes'    => json_encode(['deleted_enrollment' => $id]),
+            'action'       => 'delete',
+            'table_name'   => 'enrollment',
+            'record_id'    => $id,
+            'description'  => 'Deleted enrollment ID ' . $id,
+            'user_id'      => Auth::id(),
+            'performed_at' => now(),
         ]);
 
         return redirect()->route('admin.enrollments.index')
-            ->with('success', 'Enrollment deleted successfully.');
+            ->with('success', 'Enrollment deleted.');
     }
 }
