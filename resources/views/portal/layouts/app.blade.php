@@ -71,6 +71,10 @@
            class="nav-link {{ request()->routeIs('portal.enrollments.*') ? 'active' : '' }}">
             <i class="bi bi-clipboard-check me-2"></i>My Enrollments
         </a>
+        <a href="{{ route('portal.activity.index') }}"
+           class="nav-link {{ request()->routeIs('portal.activity.*') ? 'active' : '' }}">
+            <i class="bi bi-clock-history me-2"></i>My Activity
+        </a>
     </nav>
 
     <div class="mt-auto p-3 border-top">

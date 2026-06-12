@@ -95,6 +95,13 @@
             <i class="bi bi-clipboard-check me-2"></i>Enrollment Management
         </a>
         @endif
+
+        @if(Auth::user()->hasPermission('view_audit_log'))
+        <a href="{{ route('admin.audit-log.index') }}"
+           class="nav-link {{ request()->routeIs('admin.audit-log.*') ? 'active' : '' }}">
+            <i class="bi bi-journal-text me-2"></i>Audit Log
+        </a>
+        @endif
     </nav>
 
     <div class="mt-auto p-3 border-top">

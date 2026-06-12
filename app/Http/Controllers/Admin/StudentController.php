@@ -134,9 +134,9 @@ class StudentController extends Controller
             'action'       => 'create',
             'table_name'   => 'student',
             'record_id'    => $student->student_id,
-            'description'  => 'Created student: ' . $student->full_name,
+            'changes'      => 'Created student: ' . $student->full_name,
             'user_id'      => Auth::id(),
-            'performed_at' => now(),
+            'timestamp'    => now(),
         ]);
 
         return redirect()->route('admin.students.index')
@@ -226,9 +226,9 @@ class StudentController extends Controller
             'action'       => 'update',
             'table_name'   => 'student',
             'record_id'    => $student->student_id,
-            'description'  => 'Updated student: ' . $student->full_name,
+            'changes'  => 'Updated student: ' . $student->full_name,
             'user_id'      => Auth::id(),
-            'performed_at' => now(),
+            'timestamp'    => now(),
         ]);
 
         return redirect()->route('admin.students.index')
@@ -258,9 +258,9 @@ class StudentController extends Controller
             'action'       => 'delete',
             'table_name'   => 'student',
             'record_id'    => $id,
-            'description'  => 'Deleted student: ' . $name,
+            'changes'      => 'Deleted student: ' . $name,
             'user_id'      => Auth::id(),
-            'performed_at' => now(),
+            'timestamp'    => now(),
         ]);
 
         return redirect()->route('admin.students.index')

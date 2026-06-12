@@ -14,6 +14,8 @@ use App\Http\Controllers\Admin\PaymentController;
 use App\Http\Controllers\Portal\DashboardController  as PortalDashboardController;
 use App\Http\Controllers\Portal\ProfileController    as PortalProfileController;
 use App\Http\Controllers\Portal\EnrollmentController as PortalEnrollmentController;
+use App\Http\Controllers\Admin\AuditLogController;
+use App\Http\Controllers\Portal\ActivityController;
 
 /*
 |--------------------------------------------------------------------------
@@ -58,6 +60,10 @@ Route::prefix('admin')->name('admin.')->middleware('auth')->group(function () {
         ->name('profile.edit');
     Route::put('/profile', [AdminProfileController::class, 'update'])
         ->name('profile.update');
+    
+    Route::get('/audit-log', [AuditLogController::class, 'index'])
+        ->middleware('permission:view_audit_log')
+        ->name('audit-log.index');
 
     // ----------------------------------------------------------------
     // User Management
@@ -224,4 +230,7 @@ Route::prefix('portal')->name('portal.')->middleware('auth')->group(function () 
 
     Route::get('/enrollments/{id}', [PortalEnrollmentController::class, 'show'])
         ->name('enrollments.show');
+
+    Route::get('/my-activity', [ActivityController::class, 'index'])
+        ->name('activity.index');
 });

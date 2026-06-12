@@ -4,23 +4,21 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 
-class AuditLog extends Model
+class AuthLog extends Model
 {
-    protected $table      = 'audit_log';
-    protected $primaryKey = 'log_id';
+    protected $table      = 'auth_log';
+    protected $primaryKey = 'auth_log_id';
     public $timestamps    = false;
 
     protected $fillable = [
         'user_id',
         'action',
-        'table_name',
-        'record_id',
-        'changes',
-        'timestamp',
+        'ip_address',
+        'logged_at',
     ];
 
     protected $casts = [
-        'timestamp' => 'datetime',
+        'logged_at' => 'datetime',
     ];
 
     public function user()

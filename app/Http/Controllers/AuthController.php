@@ -6,7 +6,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 use App\Models\User;
-use App\Models\AuditLog;
+use App\Models\AuthLog;
 use Carbon\Carbon;
 
 class AuthController extends Controller
@@ -66,12 +66,11 @@ class AuthController extends Controller
             $user->locked_until    = null;
             $user->save();
 
-            AuditLog::create([
+            AuthLog::create([
                 'user_id'    => $user->user_id,
-                'action'     => 'LOGIN',
-                'table_name' => 'users',
-                'record_id'  => $user->user_id,
-                'changes'    => null,
+                'action'     => 'login',
+                'ip_address' => $request->ip(),
+                'logged_at'  => now(),
             ]);
 
             $request->session()->regenerate();
@@ -111,12 +110,11 @@ class AuthController extends Controller
             /** @var \App\Models\User $user */
             $user = Auth::user();
 
-            AuditLog::create([
+            AuthLog::create([
                 'user_id'    => $user->user_id,
-                'action'     => 'LOGOUT',
-                'table_name' => 'users',
-                'record_id'  => $user->user_id,
-                'changes'    => null,
+                'action'     => 'logout',
+                'ip_address' => $request->ip(),
+                'logged_at'  => now(),
             ]);
 
             Log::info('User logged out', [

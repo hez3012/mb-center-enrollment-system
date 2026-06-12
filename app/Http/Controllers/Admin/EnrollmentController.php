@@ -159,9 +159,9 @@ class EnrollmentController extends Controller
             'action'       => 'create',
             'table_name'   => 'enrollment',
             'record_id'    => $enrollment->enrollment_id,
-            'description'  => 'Created walk-in enrollment for student ID ' . $validated['student_id'],
+            'changes'      => 'Created walk-in enrollment for student ID ' . $validated['student_id'],
             'user_id'      => Auth::id(),
-            'performed_at' => now(),
+            'timestamp'    => now(),
         ]);
 
         return redirect()
@@ -295,9 +295,9 @@ class EnrollmentController extends Controller
             'action'       => 'update',
             'table_name'   => 'enrollment',
             'record_id'    => $enrollment->enrollment_id,
-            'description'  => 'Updated enrollment ID ' . $enrollment->enrollment_id,
+             'changes'      => 'Updated enrollment ID ' . $enrollment->enrollment_id,
             'user_id'      => Auth::id(),
-            'performed_at' => now(),
+            'timestamp'    => now(),
         ]);
 
         return redirect()
@@ -327,9 +327,9 @@ class EnrollmentController extends Controller
             'action'       => 'approve',
             'table_name'   => 'enrollment',
             'record_id'    => $enrollment->enrollment_id,
-            'description'  => 'Approved enrollment ID ' . $enrollment->enrollment_id,
+            'changes'      => 'Approved enrollment ID ' . $enrollment->enrollment_id,
             'user_id'      => Auth::id(),
-            'performed_at' => now(),
+            'timestamp'    => now(),
         ]);
 
         return back()->with('success', 'Enrollment approved. Status set to Pending Payment.');
@@ -357,9 +357,9 @@ class EnrollmentController extends Controller
             'action'       => 'reject',
             'table_name'   => 'enrollment',
             'record_id'    => $enrollment->enrollment_id,
-            'description'  => 'Rejected enrollment ID ' . $enrollment->enrollment_id,
+            'changes'      => 'Rejected enrollment ID ' . $enrollment->enrollment_id,
             'user_id'      => Auth::id(),
-            'performed_at' => now(),
+            'timestamp'    => now(),
         ]);
 
         return back()->with('success', 'Enrollment has been rejected.');
@@ -383,9 +383,9 @@ class EnrollmentController extends Controller
             'action'       => 'delete',
             'table_name'   => 'enrollment',
             'record_id'    => $id,
-            'description'  => 'Deleted enrollment ID ' . $id,
+            'changes'      => 'Deleted enrollment ID ' . $id,
             'user_id'      => Auth::id(),
-            'performed_at' => now(),
+            'timestamp'    => now(),
         ]);
 
         return redirect()->route('admin.enrollments.index')
